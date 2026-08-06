@@ -105,7 +105,7 @@ jobs:
           name: kernel-build
           path: |
             kernel-packages/
-            overlays/compiled_overlays/
+            overlays/
           retention-days: 1
 
   # ============================================================
@@ -128,7 +128,25 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y wget xz-utils kmod cpio rsync dosfstools parted qemu-user-static binfmt-support pixz
+          sudo apt-get install -y wget xz-utils kmod cpio rsync dosfstools parted qemu-user-static binfmt-support pixz gcc device-tree-compiler
+
+      - name: Checkout pinned overlays
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.OVERLAYS_REPO }}
+          ref: ${{ env.OVERLAYS_REF }}
+          path: overlay-source
+
+      - name: Compile pinned overlays
+        run: |
+          mkdir -p compiled_overlays
+          for dts in overlay-source/devicetree_overlays/*.dts; do
+            basename=$(basename "$dts" .dts)
+            gcc -E -nostdinc -Ioverlay-source/devicetree_overlays \
+              -undef -D__DTS__ -x assembler-with-cpp "$dts" | \
+              dtc -@ -I dts -O dtb -o "compiled_overlays/${basename}.dtbo" -
+          done
+          test "$(find compiled_overlays -maxdepth 1 -type f -name '*.dtbo' | wc -l)" -eq 3
 
       - name: Download current-run kernel artifacts
         if: ${{ inputs.reuse_kernel_run_id == '' }}
@@ -201,6 +219,12 @@ jobs:
           echo 'deb http://deb.debian.org/debian bookworm main contrib non-free-firmware' | \
             sudo tee ./mnt/root/etc/apt/sources.list.d/uconsole-bookworm-firmware.list >/dev/null
 
+          # Chroot cannot use the image's systemd-resolved symlink. Preserve it,
+          # install the runner's working resolver for package fetches, then
+          # restore the original image resolver before publishing.
+          sudo cp -a ./mnt/root/etc/resolv.conf ./mnt/root/etc/resolv.conf.image-build
+          sudo cp --remove-destination /etc/resolv.conf ./mnt/root/etc/resolv.conf
+
           # Install kernel
           sudo cp kernel-packages/*.deb ./mnt/root/tmp/
           sudo chroot ./mnt/root /bin/bash -c "
@@ -217,6 +241,8 @@ jobs:
             systemctl enable ssh
             update-initramfs -u -k all
           "
+          sudo rm -f ./mnt/root/etc/resolv.conf
+          sudo mv ./mnt/root/etc/resolv.conf.image-build ./mnt/root/etc/resolv.conf
 
           # Install overlays
           sudo mkdir -p ./mnt/root/boot/overlays

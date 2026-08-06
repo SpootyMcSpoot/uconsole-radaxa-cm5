@@ -233,6 +233,18 @@ jobs:
           fi
           sudo cp --remove-destination /etc/resolv.conf ./mnt/root/etc/resolv.conf
 
+          # Radxa's u-boot-menu prepends the mounted /boot path when /boot is a
+          # separate filesystem, so its overlay directory must be boot-relative.
+          # Stage overlays before kernel hooks generate extlinux.conf.
+          sudo mkdir -p ./mnt/root/boot/dtbo
+          sudo install -m 0644 compiled_overlays/*.dtbo ./mnt/root/boot/dtbo/
+          sudo sed -i -E '/^[[:space:]]*U_BOOT_FDT_OVERLAYS(_DIR)?=/d' \
+            ./mnt/root/etc/default/u-boot
+          cat <<'EOF' | sudo tee -a ./mnt/root/etc/default/u-boot >/dev/null
+          U_BOOT_FDT_OVERLAYS="axp20x.dtbo cwu50_panel.dtbo displaystuff.dtbo"
+          U_BOOT_FDT_OVERLAYS_DIR="/dtbo"
+          EOF
+
           # Install kernel
           mapfile -t KERNEL_IMAGE_DEBS < <(
             find kernel-packages -maxdepth 1 -type f -name 'linux-image-*.deb' ! -name '*-dbg_*' -print
@@ -252,7 +264,6 @@ jobs:
               iw wireless-tools wpasupplicant rfkill firmware-mediatek rtl-sdr \
               openssh-server ca-certificates curl gnupg
             systemctl enable ssh
-            update-initramfs -u -k all
             apt-get clean
           "
           sudo rm -f ./mnt/root/etc/resolv.conf
@@ -265,11 +276,6 @@ jobs:
           done
           FREE_KIB=$(df --output=avail -k ./mnt/root | tail -n 1 | xargs)
           test "$FREE_KIB" -ge 262144
-
-          # Install overlays
-          sudo mkdir -p ./mnt/root/boot/dtbo
-          sudo install -m 0644 compiled_overlays/*.dtbo ./mnt/root/boot/dtbo/
-          sudo chroot ./mnt/root u-boot-update
 
           # Static image contract: target helpers, signed repo, Wi-Fi firmware,
           # and boot files must exist before publishing.

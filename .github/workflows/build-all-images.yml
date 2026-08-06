@@ -210,14 +210,20 @@ jobs:
 
           # Configure AK-Rex's signed ARM repository without running its board
           # maintainer scripts during image assembly.
-          wget -q -O ak-rex.gpg \
+          wget -q -O ak-rex-key.asc \
             https://raw.githubusercontent.com/ak-rex/akrex-arm-repo/main/debian/KEY.gpg
-          echo '842f9fee1af93ec9fc5c45c5471f8d1ef7be605f35e458eca64d6dcc1699b206  ak-rex.gpg' | sha256sum -c -
+          echo '842f9fee1af93ec9fc5c45c5471f8d1ef7be605f35e458eca64d6dcc1699b206  ak-rex-key.asc' | sha256sum -c -
+          gpg --batch --dearmor --output ak-rex.gpg ak-rex-key.asc
+          AK_REX_FINGERPRINT=$(
+            gpg --batch --show-keys --with-colons ak-rex.gpg | \
+              awk -F: '$1 == "fpr" { print $10; exit }'
+          )
+          test "$AK_REX_FINGERPRINT" = '5799BD7F376D1011C510B036B40C8F551C4AB897'
           sudo install -D -m 0644 ak-rex.gpg ./mnt/root/usr/share/keyrings/ak-rex.gpg
           echo 'deb [arch=arm64 signed-by=/usr/share/keyrings/ak-rex.gpg] https://raw.githubusercontent.com/ak-rex/akrex-arm-repo/main/debian stable main' | \
             sudo tee ./mnt/root/etc/apt/sources.list.d/ak-rex.list >/dev/null
-          echo 'deb http://deb.debian.org/debian bookworm main contrib non-free-firmware' | \
-            sudo tee ./mnt/root/etc/apt/sources.list.d/uconsole-bookworm-firmware.list >/dev/null
+          sudo grep -Rqs 'non-free-firmware' \
+            ./mnt/root/etc/apt/sources.list ./mnt/root/etc/apt/sources.list.d
 
           # Chroot cannot use the image's systemd-resolved symlink. Preserve it,
           # install the runner's working resolver for package fetches, then

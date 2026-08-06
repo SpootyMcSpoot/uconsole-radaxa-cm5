@@ -19,6 +19,11 @@ on:
           - kali
           - retropie
         default: 'debian'
+      reuse_kernel_run_id:
+        description: 'Successful prior run ID containing kernel-build artifact (optional)'
+        required: false
+        default: ''
+        type: string
 
 env:
   ARCH: arm64
@@ -34,6 +39,7 @@ jobs:
   # JOB 1: Build kernel once, use for all distros
   # ============================================================
   build-kernel:
+    if: ${{ inputs.reuse_kernel_run_id == '' }}
     runs-on: ubuntu-22.04
     outputs:
       kernel_version: ${{ steps.set-version.outputs.version }}
@@ -107,7 +113,12 @@ jobs:
   # ============================================================
   build-debian:
     needs: build-kernel
-    if: ${{ github.event.inputs.build_target == 'debian' || github.event.inputs.build_target == 'all' }}
+    if: >-
+      ${{
+        always() &&
+        (inputs.build_target == 'debian' || inputs.build_target == 'all') &&
+        (needs.build-kernel.result == 'success' || inputs.reuse_kernel_run_id != '')
+      }}
     runs-on: ubuntu-22.04
     
     steps:
@@ -119,10 +130,19 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y wget xz-utils kmod cpio rsync dosfstools parted qemu-user-static binfmt-support pixz
 
-      - name: Download kernel artifacts
+      - name: Download current-run kernel artifacts
+        if: ${{ inputs.reuse_kernel_run_id == '' }}
         uses: actions/download-artifact@v4
         with:
           name: kernel-build
+
+      - name: Download verified prior-run kernel artifacts
+        if: ${{ inputs.reuse_kernel_run_id != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: kernel-build
+          run-id: ${{ inputs.reuse_kernel_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download base image
         run: |
@@ -137,11 +157,20 @@ jobs:
           echo "Loop device: $LOOP_DEVICE"
 
           # rsdk-b3 uses p1=config (FAT16), p2=efi (FAT16), p3=rootfs
-          # (ext4). Fail closed if the pinned base image layout changes.
-          test "$(lsblk -no LABEL "${LOOP_DEVICE}p1" | xargs)" = "config"
-          test "$(lsblk -no LABEL "${LOOP_DEVICE}p2" | xargs)" = "efi"
-          test "$(lsblk -no LABEL "${LOOP_DEVICE}p3" | xargs)" = "rootfs"
-          test "$(lsblk -no FSTYPE "${LOOP_DEVICE}p3" | xargs)" = "ext4"
+          # (ext4). Probe filesystems directly: lsblk's udev-backed LABEL can
+          # still be blank immediately after losetup -P on hosted runners.
+          assert_partition() {
+            local device="$1" expected_label="$2" expected_type="$3"
+            local actual_label actual_type
+            actual_label=$(sudo blkid -p -s LABEL -o value "$device")
+            actual_type=$(sudo blkid -p -s TYPE -o value "$device")
+            printf '%s label=%s type=%s\n' "$device" "$actual_label" "$actual_type"
+            test "$actual_label" = "$expected_label"
+            test "$actual_type" = "$expected_type"
+          }
+          assert_partition "${LOOP_DEVICE}p1" config vfat
+          assert_partition "${LOOP_DEVICE}p2" efi vfat
+          assert_partition "${LOOP_DEVICE}p3" rootfs ext4
 
           mkdir -p ./mnt/root
           sudo mount ${LOOP_DEVICE}p3 ./mnt/root
@@ -219,7 +248,7 @@ jobs:
 
       - name: Compress image
         run: |
-          IMAGE_NAME="radxa-cm5-uconsole_debian_bookworm_kernel-${{ needs.build-kernel.outputs.kernel_version }}_$(date +%Y%m%d).img"
+          IMAGE_NAME="radxa-cm5-uconsole_debian_bookworm_kernel-${{ inputs.kernel_version }}_$(date +%Y%m%d).img"
           mv debian.img "$IMAGE_NAME"
           sha256sum "$IMAGE_NAME" > "${IMAGE_NAME}.sha256"
           xz -z -9 -T$(nproc) "$IMAGE_NAME"
@@ -475,7 +504,7 @@ jobs:
           # Radxa CM5 uConsole Build
 
           **Build Date:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")
-          **Kernel Version:** 6.1.x-${{ needs.build-kernel.outputs.kernel_version }}
+          **Kernel Version:** 6.1.x-${{ inputs.kernel_version }}
           **Kernel Source:** ClockworkRadxa-linux (linux-6.1-stan-rkr4.1)
           **Build Target:** ${BUILD_TARGET}
 

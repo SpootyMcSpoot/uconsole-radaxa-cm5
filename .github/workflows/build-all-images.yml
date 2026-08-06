@@ -222,7 +222,9 @@ jobs:
           # Chroot cannot use the image's systemd-resolved symlink. Preserve it,
           # install the runner's working resolver for package fetches, then
           # restore the original image resolver before publishing.
-          sudo cp -a ./mnt/root/etc/resolv.conf ./mnt/root/etc/resolv.conf.image-build
+          if [ -e ./mnt/root/etc/resolv.conf ] || [ -L ./mnt/root/etc/resolv.conf ]; then
+            sudo cp -a ./mnt/root/etc/resolv.conf ./mnt/root/etc/resolv.conf.image-build
+          fi
           sudo cp --remove-destination /etc/resolv.conf ./mnt/root/etc/resolv.conf
 
           # Install kernel
@@ -242,7 +244,9 @@ jobs:
             update-initramfs -u -k all
           "
           sudo rm -f ./mnt/root/etc/resolv.conf
-          sudo mv ./mnt/root/etc/resolv.conf.image-build ./mnt/root/etc/resolv.conf
+          if [ -e ./mnt/root/etc/resolv.conf.image-build ] || [ -L ./mnt/root/etc/resolv.conf.image-build ]; then
+            sudo mv ./mnt/root/etc/resolv.conf.image-build ./mnt/root/etc/resolv.conf
+          fi
 
           # Install overlays
           sudo mkdir -p ./mnt/root/boot/overlays

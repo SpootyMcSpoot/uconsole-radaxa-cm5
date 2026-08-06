@@ -267,8 +267,9 @@ jobs:
           test "$FREE_KIB" -ge 262144
 
           # Install overlays
-          sudo mkdir -p ./mnt/root/boot/overlays
-          sudo cp compiled_overlays/*.dtbo ./mnt/root/boot/overlays/
+          sudo mkdir -p ./mnt/root/boot/dtbo
+          sudo install -m 0644 compiled_overlays/*.dtbo ./mnt/root/boot/dtbo/
+          sudo chroot ./mnt/root u-boot-update
 
           # Static image contract: target helpers, signed repo, Wi-Fi firmware,
           # and boot files must exist before publishing.
@@ -278,6 +279,11 @@ jobs:
           sudo test -s ./mnt/root/usr/share/keyrings/ak-rex.gpg
           sudo test -d ./mnt/root/lib/firmware/mediatek
           sudo test -d ./mnt/root/boot/extlinux
+          for overlay in axp20x.dtbo cwu50_panel.dtbo displaystuff.dtbo; do
+            sudo test -s "./mnt/root/boot/dtbo/$overlay"
+            sudo grep -Eq "^[[:space:]]*fdtoverlays .* /dtbo/$overlay([[:space:]]|$)" \
+              ./mnt/root/boot/extlinux/extlinux.conf
+          done
 
           sudo sync
           sudo umount ./mnt/root/boot

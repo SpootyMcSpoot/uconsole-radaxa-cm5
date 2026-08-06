@@ -19,11 +19,36 @@ OUTPUT_DIR="build/output"
 echo "Building kernel..."
 cd "${KERNEL_DIR}"
 make rockchip_linux_defconfig
-make -j$(nproc) Image modules dtbs
+
+# HackerGadgets Radxa CM5 adapter: NVMe root plus MT7921AUN USB Wi-Fi/BT.
+# Force modules here because the vendor defconfig has varied across releases.
+./scripts/config --enable CONFIG_PCI
+./scripts/config --enable CONFIG_PCIEPORTBUS
+./scripts/config --enable CONFIG_PCIE_ROCKCHIP
+./scripts/config --enable CONFIG_PCIE_ROCKCHIP_HOST
+./scripts/config --enable CONFIG_NVME_CORE
+./scripts/config --enable CONFIG_BLK_DEV_NVME
+./scripts/config --module CONFIG_MT76
+./scripts/config --module CONFIG_MT76_USB
+./scripts/config --module CONFIG_MT792x_LIB
+./scripts/config --module CONFIG_MT7921_COMMON
+./scripts/config --module CONFIG_MT7921U
+./scripts/config --module CONFIG_BT_HCIBTUSB
+./scripts/config --enable CONFIG_BT_HCIBTUSB_MTK
+./scripts/config --module CONFIG_DRM_PANEL_CWU50
+make olddefconfig
+
+for symbol in BLK_DEV_NVME MT7921U BT_HCIBTUSB DRM_PANEL_CWU50; do
+    grep -Eq "^CONFIG_${symbol}=(y|m)$" .config || {
+        echo "Required kernel symbol CONFIG_${symbol} missing" >&2
+        exit 1
+    }
+done
+make -j"$(nproc)" Image modules dtbs
 
 echo "Building kernel packages..."
 export KDEB_PKGVERSION="${KERNEL_VERSION}"
-make -j$(nproc) bindeb-pkg
+make -j"$(nproc)" bindeb-pkg
 
 echo "Collecting kernel packages..."
 mkdir -p "../../${OUTPUT_DIR}/kernel-packages"

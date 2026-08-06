@@ -1,0 +1,29 @@
+#!/bin/bash
+# Functions are dispatched by name through check().
+# shellcheck disable=SC2329
+set -u
+
+fail=0
+check() {
+    local label=$1
+    shift
+    if "$@"; then printf 'PASS %s\n' "$label"; else printf 'FAIL %s\n' "$label"; fail=1; fi
+}
+is_radxa() { tr -d '\0' </proc/device-tree/model | grep -Eqi 'radxa.*cm5|rk3588s'; }
+root_on_nvme() { findmnt -n -o SOURCE / | grep -q '^/dev/nvme'; }
+has_nvme() { nvme list 2>/dev/null | grep -q /dev/nvme; }
+package_ok() { dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q 'install ok installed'; }
+storage_ok() { [[ -d /srv/shtf-box/packages && -f /etc/shtf-box/storage.env ]]; }
+systemd_ok() { [[ $(systemctl --failed --no-legend 2>/dev/null | wc -l) -eq 0 ]]; }
+
+check "aarch64" test "$(uname -m)" = aarch64
+check "Radxa CM5 model" is_radxa
+check "root on NVMe" root_on_nvme
+check "NVMe device" has_nvme
+check "MT7921 USB driver" modinfo mt7921u
+check "HackerGadgets package" package_ok hackergadgets-uconsole-aio-board
+check "Meshtastic UI package" package_ok meshtastic-mui
+check "SDR package" package_ok sdrpp-brown
+check "SHTF storage" storage_ok
+check "no failed systemd units" systemd_ok
+exit "$fail"

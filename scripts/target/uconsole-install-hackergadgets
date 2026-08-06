@@ -1,0 +1,38 @@
+#!/bin/bash
+set -Eeuo pipefail
+
+[[ $EUID -eq 0 ]] || { echo "Must run as root" >&2; exit 1; }
+[[ $(uname -m) == aarch64 ]] || { echo "Refusing: target is not aarch64" >&2; exit 1; }
+model=$(tr -d '\0' </proc/device-tree/model 2>/dev/null || true)
+grep -Eqi 'radxa.*cm5|rk3588s' <<<"$model" || { echo "Refusing: not Radxa CM5 ($model)" >&2; exit 1; }
+root_source=$(findmnt -n -o SOURCE /)
+[[ $root_source == /dev/nvme* ]] || {
+    echo "Refusing large package install before NVMe is active as root (current: $root_source)" >&2
+    exit 1
+}
+
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get install -y --install-recommends \
+    hackergadgets-uconsole-aio-board meshtastic-mui sdrpp-brown tar1090 pygpsclient \
+    nvme-cli smartmontools pciutils usbutils i2c-tools iw wireless-tools \
+    firmware-mediatek rfkill rtl-sdr rtl-433 gpsd gpsd-clients \
+    podman git rsync curl ca-certificates
+
+install -d -m 0755 /srv/shtf-box/{packages,data,cache,models,maps,backups} /etc/shtf-box
+cat >/etc/shtf-box/storage.env <<'EOF'
+SHTF_ROOT=/srv/shtf-box
+SHTF_DATA=/srv/shtf-box/data
+SHTF_CACHE=/srv/shtf-box/cache
+SHTF_MODELS=/srv/shtf-box/models
+SHTF_MAPS=/srv/shtf-box/maps
+EOF
+
+depmod -a
+modprobe nvme || true
+modprobe mt7921u || true
+modprobe btusb || true
+systemctl enable --now gpsd.socket 2>/dev/null || true
+date -u +%FT%TZ >/etc/shtf-box/hackergadgets-installed-at
+echo "HackerGadgets packages installed on NVMe root; reboot required."
+

@@ -1,0 +1,111 @@
+#!/bin/bash
+set -Eeuo pipefail
+
+usage() {
+    echo "Usage: sudo uconsole-bootstrap-nvme-root --device /dev/nvme0n1 --yes"
+}
+
+device=""
+confirmed=false
+while (($#)); do
+    case "$1" in
+        --device) device="${2:-}"; shift 2 ;;
+        --yes) confirmed=true; shift ;;
+        -h|--help) usage; exit 0 ;;
+        *) echo "Unknown argument: $1" >&2; usage >&2; exit 2 ;;
+    esac
+done
+
+[[ $EUID -eq 0 ]] || { echo "Must run as root" >&2; exit 1; }
+[[ $(uname -m) == aarch64 ]] || { echo "Refusing: target is not aarch64" >&2; exit 1; }
+model=$(tr -d '\0' </proc/device-tree/model 2>/dev/null || true)
+compatible=$(tr '\0' ',' </proc/device-tree/compatible 2>/dev/null || true)
+grep -Eqi 'radxa.*cm5|rk3588s' <<<"$model,$compatible" || {
+    echo "Refusing: not a Radxa CM5 target ($model)" >&2
+    exit 1
+}
+$confirmed || { echo "Refusing destructive NVMe initialization without --yes" >&2; exit 2; }
+[[ $device =~ ^/dev/nvme[0-9]+n[0-9]+$ && -b $device ]] || {
+    echo "Refusing invalid NVMe block device: $device" >&2
+    exit 1
+}
+
+root_source=$(findmnt -n -o SOURCE /)
+[[ $root_source != "$device"* ]] || { echo "Root already uses $device" >&2; exit 1; }
+if lsblk -nrpo MOUNTPOINT "$device" | grep -q '/'; then
+    echo "Refusing: $device or one of its partitions is mounted" >&2
+    exit 1
+fi
+for cmd in findmnt lsblk blkid sgdisk wipefs mkfs.ext4 rsync udevadm partprobe mountpoint; do
+    command -v "$cmd" >/dev/null || { echo "Missing required command: $cmd" >&2; exit 1; }
+done
+
+stamp=$(date -u +%Y%m%dT%H%M%SZ)
+evidence="/var/log/uconsole-nvme-bootstrap-$stamp"
+mkdir -p "$evidence"
+{
+    echo "model=$model"
+    echo "source_root=$root_source"
+    echo "target=$device"
+    lsblk -e7 -o NAME,PATH,SIZE,TYPE,FSTYPE,UUID,MOUNTPOINTS
+} >"$evidence/preflight.txt"
+
+wipefs --all "$device"
+sgdisk --zap-all "$device"
+sgdisk --new=1:0:0 --typecode=1:8300 --change-name=1:uconsole-root "$device"
+partprobe "$device"
+udevadm settle
+partition="${device}p1"
+[[ -b $partition ]] || { echo "Partition did not appear: $partition" >&2; exit 1; }
+mkfs.ext4 -F -L uconsole-root "$partition"
+
+mountpoint=/mnt/uconsole-nvme-root
+mkdir -p "$mountpoint"
+mount "$partition" "$mountpoint"
+cleanup() {
+    for fs in run sys proc dev; do
+        mountpoint -q "$mountpoint/$fs" && umount "$mountpoint/$fs" || true
+    done
+    mountpoint -q "$mountpoint" && umount "$mountpoint" || true
+}
+trap cleanup EXIT
+
+rsync -aHAXx --numeric-ids --info=stats2 \
+    --exclude=/dev --exclude=/proc --exclude=/sys --exclude=/run \
+    --exclude=/tmp --exclude=/mnt --exclude=/media --exclude=/lost+found \
+    / "$mountpoint"/
+mkdir -p "$mountpoint"/{dev,proc,sys,run,tmp,mnt,media}
+chmod 1777 "$mountpoint/tmp"
+
+root_uuid=$(blkid -s UUID -o value "$partition")
+awk '$2 != "/" {print}' /etc/fstab >"$mountpoint/etc/fstab"
+printf 'UUID=%s / ext4 defaults,noatime 0 1\n' "$root_uuid" >>"$mountpoint/etc/fstab"
+
+boot_config=""
+for candidate in /boot/extlinux/extlinux.conf /boot/firmware/extlinux/extlinux.conf; do
+    if [[ -f $candidate ]]; then boot_config=$candidate; break; fi
+done
+[[ -n $boot_config ]] || { echo "No extlinux.conf found; eMMC left unchanged" >&2; exit 1; }
+grep -Eq '(^|[[:space:]])root=' "$boot_config" || {
+    echo "No root= argument in $boot_config; eMMC left unchanged" >&2
+    exit 1
+}
+cp -a "$boot_config" "$evidence/extlinux.conf.before"
+sed -E -i "s#root=[^[:space:]]+#root=UUID=$root_uuid#g" "$boot_config"
+cp -a "$boot_config" "$evidence/extlinux.conf.after"
+
+mkdir -p "$mountpoint/etc/initramfs-tools"
+touch "$mountpoint/etc/initramfs-tools/modules"
+for module in nvme nvme_core; do
+    grep -qxF "$module" "$mountpoint/etc/initramfs-tools/modules" || echo "$module" >>"$mountpoint/etc/initramfs-tools/modules"
+done
+for fs in dev proc sys run; do mount --bind "/$fs" "$mountpoint/$fs"; done
+chroot "$mountpoint" update-initramfs -u -k all
+for fs in run sys proc dev; do umount "$mountpoint/$fs"; done
+
+printf 'nvme_root_uuid=%s\nboot_config=%s\n' "$root_uuid" "$boot_config" >"$evidence/result.txt"
+sync
+umount "$mountpoint"
+trap - EXIT
+echo "NVMe root prepared: UUID=$root_uuid"
+echo "eMMC root preserved. Reboot, then verify findmnt / reports $partition."

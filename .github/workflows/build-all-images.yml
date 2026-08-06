@@ -23,8 +23,10 @@ on:
 env:
   ARCH: arm64
   DEBIAN_FRONTEND: noninteractive
-  KERNEL_BRANCH: linux-6.1-stan-rkr4.1
+  # June 2026 Radxa/uConsole refresh. Pin exact source for reproducibility.
+  KERNEL_BRANCH: d142501df0e913a68f71d06fc2f0cb01b6e9373e
   OVERLAYS_REPO: dev-null2019/radxa-cm5-uconsole
+  OVERLAYS_REF: c2204834e1d7d0acfd64e1b7874d432bc142f1a4
   KERNEL_REPO: ak-rex/ClockworkRadxa-linux
 
 jobs:
@@ -69,13 +71,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ env.OVERLAYS_REPO }}
+          ref: ${{ env.OVERLAYS_REF }}
           path: build/overlays
 
       - name: Build kernel and overlays
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-none-linux-gnu-
-          export KERNEL_VERSION="${{ github.inputs.kernel_version }}"
+          export KERNEL_VERSION="${{ inputs.kernel_version }}"
 
           # Run the build script
           ./scripts/build-kernel-ci.sh
@@ -88,7 +91,7 @@ jobs:
 
       - name: Set kernel version output
         id: set-version
-        run: echo "version=${{ github.inputs.kernel_version }}" >> $GITHUB_OUTPUT
+        run: echo "version=${{ inputs.kernel_version }}" >> "$GITHUB_OUTPUT"
 
       - name: Upload kernel artifacts
         uses: actions/upload-artifact@v4
@@ -108,6 +111,9 @@ jobs:
     runs-on: ubuntu-22.04
     
     steps:
+      - name: Checkout image customizations
+        uses: actions/checkout@v4
+
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -121,6 +127,7 @@ jobs:
       - name: Download base image
         run: |
           wget -O debian.img.xz https://github.com/radxa-build/radxa-cm5-rpi-cm4-io/releases/download/rsdk-b3/radxa-cm5-rpi-cm4-io_bookworm_cli_b3.output.img.xz
+          echo '7a69bff7aaa283ed6c31090dddd6b30456069547a5c8fb9f3c22673d9944065c806b448be79beb90a94046cdb8756d74195a708d4db55d8d2b3ae08d5c6808c7  debian.img.xz' | sha512sum -c -
           xz -d debian.img.xz
 
       - name: Mount and modify image
@@ -129,13 +136,34 @@ jobs:
           export LOOP_DEVICE=$(losetup -a | grep debian.img | cut -d: -f1)
           echo "Loop device: $LOOP_DEVICE"
 
-          mkdir -p ./mnt/{boot,root}
-          sudo mount ${LOOP_DEVICE}p1 ./mnt/boot || true
+          mkdir -p ./mnt/root
           sudo mount ${LOOP_DEVICE}p2 ./mnt/root
+          sudo mkdir -p ./mnt/root/boot
+          sudo mount ${LOOP_DEVICE}p1 ./mnt/root/boot
 
           # Verify mount and create tmp directory
           ls -la ./mnt/root/ || true
           sudo mkdir -p ./mnt/root/tmp
+
+          # Install target-only helpers. These scripts are copied into the image;
+          # they are never executed on the GitHub runner or operator workstation.
+          sudo install -m 0755 scripts/target/uconsole-bootstrap-nvme-root \
+            ./mnt/root/usr/local/sbin/uconsole-bootstrap-nvme-root
+          sudo install -m 0755 scripts/target/uconsole-install-hackergadgets \
+            ./mnt/root/usr/local/sbin/uconsole-install-hackergadgets
+          sudo install -m 0755 scripts/target/uconsole-validate-hardware \
+            ./mnt/root/usr/local/sbin/uconsole-validate-hardware
+
+          # Configure AK-Rex's signed ARM repository without running its board
+          # maintainer scripts during image assembly.
+          wget -q -O ak-rex.gpg \
+            https://raw.githubusercontent.com/ak-rex/akrex-arm-repo/main/debian/KEY.gpg
+          echo '842f9fee1af93ec9fc5c45c5471f8d1ef7be605f35e458eca64d6dcc1699b206  ak-rex.gpg' | sha256sum -c -
+          sudo install -D -m 0644 ak-rex.gpg ./mnt/root/usr/share/keyrings/ak-rex.gpg
+          echo 'deb [arch=arm64 signed-by=/usr/share/keyrings/ak-rex.gpg] https://raw.githubusercontent.com/ak-rex/akrex-arm-repo/main/debian stable main' | \
+            sudo tee ./mnt/root/etc/apt/sources.list.d/ak-rex.list >/dev/null
+          echo 'deb http://deb.debian.org/debian bookworm main contrib non-free-firmware' | \
+            sudo tee ./mnt/root/etc/apt/sources.list.d/uconsole-bookworm-firmware.list >/dev/null
 
           # Install kernel
           sudo cp kernel-packages/*.deb ./mnt/root/tmp/
@@ -145,21 +173,37 @@ jobs:
             dpkg -i linux-image-*.deb || true
             apt-get install -f -y
             rm -f /tmp/*.deb
+            apt-get update
+            apt-get install -y --no-install-recommends \
+              gdisk parted e2fsprogs rsync nvme-cli smartmontools pciutils usbutils i2c-tools \
+              iw wireless-tools wpasupplicant rfkill firmware-mediatek rtl-sdr \
+              openssh-server ca-certificates curl gnupg
+            systemctl enable ssh
             update-initramfs -u -k all
           "
 
           # Install overlays
-          sudo mkdir -p ./mnt/boot/overlays
-          sudo cp compiled_overlays/*.dtbo ./mnt/boot/overlays/ 2>/dev/null || true
+          sudo mkdir -p ./mnt/root/boot/overlays
+          sudo cp compiled_overlays/*.dtbo ./mnt/root/boot/overlays/
+
+          # Static image contract: target helpers, signed repo, Wi-Fi firmware,
+          # and boot files must exist before publishing.
+          sudo test -x ./mnt/root/usr/local/sbin/uconsole-bootstrap-nvme-root
+          sudo test -x ./mnt/root/usr/local/sbin/uconsole-install-hackergadgets
+          sudo test -x ./mnt/root/usr/local/sbin/uconsole-validate-hardware
+          sudo test -s ./mnt/root/usr/share/keyrings/ak-rex.gpg
+          sudo test -d ./mnt/root/lib/firmware/mediatek
+          sudo test -d ./mnt/root/boot/extlinux
 
           sudo sync
-          sudo umount ./mnt/boot ./mnt/root
+          sudo umount ./mnt/root/boot
+          sudo umount ./mnt/root
           sudo losetup -d $LOOP_DEVICE
 
       - name: Cleanup mounts
         if: always()
         run: |
-          sudo umount ./mnt/boot ./mnt/root 2>/dev/null || true
+          sudo umount ./mnt/root/boot ./mnt/root 2>/dev/null || true
           LOOP_DEVICE=$(losetup -a | grep debian.img | cut -d: -f1 || true)
           if [ -n "$LOOP_DEVICE" ]; then
             sudo losetup -d $LOOP_DEVICE || true
@@ -170,6 +214,7 @@ jobs:
         run: |
           IMAGE_NAME="radxa-cm5-uconsole_debian_bookworm_kernel-${{ needs.build-kernel.outputs.kernel_version }}_$(date +%Y%m%d).img"
           mv debian.img "$IMAGE_NAME"
+          sha256sum "$IMAGE_NAME" > "${IMAGE_NAME}.sha256"
           xz -z -9 -T$(nproc) "$IMAGE_NAME"
           sha256sum "${IMAGE_NAME}.xz" > "${IMAGE_NAME}.xz.sha256"
           echo "DEBIAN_IMAGE=${IMAGE_NAME}.xz" >> $GITHUB_ENV
@@ -181,6 +226,7 @@ jobs:
           path: |
             ${{ env.DEBIAN_IMAGE }}
             ${{ env.DEBIAN_IMAGE }}.sha256
+            '*.img.sha256'
           retention-days: 30
 
   # ============================================================

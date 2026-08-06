@@ -228,25 +228,37 @@ jobs:
           sudo cp --remove-destination /etc/resolv.conf ./mnt/root/etc/resolv.conf
 
           # Install kernel
-          sudo cp kernel-packages/*.deb ./mnt/root/tmp/
+          mapfile -t KERNEL_IMAGE_DEBS < <(
+            find kernel-packages -maxdepth 1 -type f -name 'linux-image-*.deb' ! -name '*-dbg_*' -print
+          )
+          test "${#KERNEL_IMAGE_DEBS[@]}" -eq 1
+          sudo install -m 0644 "${KERNEL_IMAGE_DEBS[0]}" ./mnt/root/tmp/
           sudo chroot ./mnt/root /bin/bash -c "
+            set -euo pipefail
             export DEBIAN_FRONTEND=noninteractive
             cd /tmp
-            dpkg -i linux-image-*.deb || true
-            apt-get install -f -y
+            dpkg -i linux-image-*.deb || apt-get install -f -y --no-upgrade
             rm -f /tmp/*.deb
+            apt-get clean
             apt-get update
-            apt-get install -y --no-install-recommends \
+            apt-get install -y --no-install-recommends --no-upgrade \
               gdisk parted e2fsprogs rsync nvme-cli smartmontools pciutils usbutils i2c-tools \
               iw wireless-tools wpasupplicant rfkill firmware-mediatek rtl-sdr \
               openssh-server ca-certificates curl gnupg
             systemctl enable ssh
             update-initramfs -u -k all
+            apt-get clean
           "
           sudo rm -f ./mnt/root/etc/resolv.conf
           if [ -e ./mnt/root/etc/resolv.conf.image-build ] || [ -L ./mnt/root/etc/resolv.conf.image-build ]; then
             sudo mv ./mnt/root/etc/resolv.conf.image-build ./mnt/root/etc/resolv.conf
           fi
+
+          for package in nvme-cli smartmontools firmware-mediatek rtl-sdr openssh-server; do
+            sudo chroot ./mnt/root dpkg-query -W -f='${db:Status-Abbrev}' "$package" | grep -qx 'ii '
+          done
+          FREE_KIB=$(df --output=avail -k ./mnt/root | tail -n 1 | xargs)
+          test "$FREE_KIB" -ge 262144
 
           # Install overlays
           sudo mkdir -p ./mnt/root/boot/overlays

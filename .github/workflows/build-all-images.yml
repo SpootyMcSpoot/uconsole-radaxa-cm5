@@ -136,10 +136,17 @@ jobs:
           export LOOP_DEVICE=$(losetup -a | grep debian.img | cut -d: -f1)
           echo "Loop device: $LOOP_DEVICE"
 
+          # rsdk-b3 uses p1=config (FAT16), p2=efi (FAT16), p3=rootfs
+          # (ext4). Fail closed if the pinned base image layout changes.
+          test "$(lsblk -no LABEL "${LOOP_DEVICE}p1" | xargs)" = "config"
+          test "$(lsblk -no LABEL "${LOOP_DEVICE}p2" | xargs)" = "efi"
+          test "$(lsblk -no LABEL "${LOOP_DEVICE}p3" | xargs)" = "rootfs"
+          test "$(lsblk -no FSTYPE "${LOOP_DEVICE}p3" | xargs)" = "ext4"
+
           mkdir -p ./mnt/root
-          sudo mount ${LOOP_DEVICE}p2 ./mnt/root
+          sudo mount ${LOOP_DEVICE}p3 ./mnt/root
           sudo mkdir -p ./mnt/root/boot
-          sudo mount ${LOOP_DEVICE}p1 ./mnt/root/boot
+          sudo mount ${LOOP_DEVICE}p2 ./mnt/root/boot
 
           # Verify mount and create tmp directory
           ls -la ./mnt/root/ || true
@@ -147,11 +154,11 @@ jobs:
 
           # Install target-only helpers. These scripts are copied into the image;
           # they are never executed on the GitHub runner or operator workstation.
-          sudo install -m 0755 scripts/target/uconsole-bootstrap-nvme-root \
+          sudo install -D -m 0755 scripts/target/uconsole-bootstrap-nvme-root \
             ./mnt/root/usr/local/sbin/uconsole-bootstrap-nvme-root
-          sudo install -m 0755 scripts/target/uconsole-install-hackergadgets \
+          sudo install -D -m 0755 scripts/target/uconsole-install-hackergadgets \
             ./mnt/root/usr/local/sbin/uconsole-install-hackergadgets
-          sudo install -m 0755 scripts/target/uconsole-validate-hardware \
+          sudo install -D -m 0755 scripts/target/uconsole-validate-hardware \
             ./mnt/root/usr/local/sbin/uconsole-validate-hardware
 
           # Configure AK-Rex's signed ARM repository without running its board

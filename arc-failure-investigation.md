@@ -32,3 +32,20 @@
 4. Verify packages, services, firmware, boot files, driver content, filesystem,
    checksum, flash readback, display, NVMe, Wi-Fi, and AIO2 hardware.
 
+## Backport compile gate
+
+- Gate: kernel-only CI run `31356113641`, commit `6d486df`
+- Result: failed while compiling `panel-cwu50.c`; all other observed output was
+  warnings or continued compilation.
+- Leading implementation hypothesis: Radxa enables `-Werror`, while the pinned
+  Raspberry Pi driver contains five unused local declarations. Evidence: the
+  compiler reported only `err` in `cwu50_init_sequence2`, plus `dsi` and `ret`
+  in each of `cwu50_disable` and `cwu50_enable`.
+- Contract hypothesis: the pinned driver otherwise uses an unsupported 6.1 API.
+  Evidence against: the previously identified `prepare_prev_first` assignment
+  was removed and no missing-field or missing-symbol error occurred.
+- Infrastructure hypothesis: CI runner or cross-compiler failure. Evidence
+  against: the build ran for 17 minutes and failed deterministically on those
+  source warnings.
+- Minimal experiment: remove only the five unused declarations, retain the
+  panel-ID and second-init-sequence assertions, and rerun kernel-only CI once.

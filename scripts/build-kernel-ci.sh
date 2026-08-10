@@ -17,6 +17,7 @@ OVERLAYS_DIR="build/overlays"
 OUTPUT_DIR="build/output"
 
 echo "Building kernel..."
+./scripts/install-cwu50-new-panel-driver.sh "${KERNEL_DIR}"
 cd "${KERNEL_DIR}"
 make rockchip_linux_defconfig
 
@@ -44,6 +45,8 @@ for symbol in BLK_DEV_NVME MT7921U BT_HCIBTUSB DRM_PANEL_CWU50; do
         exit 1
     }
 done
+grep -q 'cwu50_init_sequence2' drivers/gpu/drm/panel/panel-cwu50.c
+grep -q 'is_new_panel' drivers/gpu/drm/panel/panel-cwu50.c
 make -j"$(nproc)" Image modules dtbs
 
 echo "Building kernel packages..."

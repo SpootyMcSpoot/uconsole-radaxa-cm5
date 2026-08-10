@@ -63,17 +63,18 @@ fi
 
 # Build kernel
 log_info "Configuring kernel..."
+"$(dirname "$0")/install-cwu50-new-panel-driver.sh" "${KERNEL_DIR}"
 cd "${KERNEL_DIR}"
 export ARCH
 export CROSS_COMPILE
 make rockchip_linux_defconfig
 
 log_info "Building kernel (this will take 30-45 minutes)..."
-make -j$(nproc) Image modules dtbs
+make -j"$(nproc)" Image modules dtbs
 
 log_info "Building kernel packages..."
 export KDEB_PKGVERSION="${KERNEL_VERSION}"
-make -j$(nproc) bindeb-pkg
+make -j"$(nproc)" bindeb-pkg
 
 # Move packages
 log_info "Collecting kernel packages..."

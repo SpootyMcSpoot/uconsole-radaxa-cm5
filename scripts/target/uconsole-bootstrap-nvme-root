@@ -63,7 +63,7 @@ mountpoint=/mnt/uconsole-nvme-root
 mkdir -p "$mountpoint"
 mount "$partition" "$mountpoint"
 cleanup() {
-    for fs in run sys proc dev; do
+    for fs in boot run sys proc dev; do
         mountpoint -q "$mountpoint/$fs" && umount "$mountpoint/$fs" || true
     done
     mountpoint -q "$mountpoint" && umount "$mountpoint" || true
@@ -74,10 +74,11 @@ rsync -aHAXx --numeric-ids --info=stats2 \
     --exclude=/dev --exclude=/proc --exclude=/sys --exclude=/run \
     --exclude=/tmp --exclude=/mnt --exclude=/media --exclude=/lost+found \
     / "$mountpoint"/
-mkdir -p "$mountpoint"/{dev,proc,sys,run,tmp,mnt,media}
+mkdir -p "$mountpoint"/{boot,dev,proc,sys,run,tmp,mnt,media}
 chmod 1777 "$mountpoint/tmp"
 
 root_uuid=$(blkid -s UUID -o value "$partition")
+emmc_root_uuid=$(findmnt -n -o UUID /)
 awk '$2 != "/" {print}' /etc/fstab >"$mountpoint/etc/fstab"
 printf 'UUID=%s / ext4 defaults,noatime 0 1\n' "$root_uuid" >>"$mountpoint/etc/fstab"
 
@@ -91,6 +92,7 @@ grep -Eq '(^|[[:space:]])root=' "$boot_config" || {
     exit 1
 }
 cp -a "$boot_config" "$evidence/extlinux.conf.before"
+cp -a "$boot_config" "$boot_config.emmc-root-$stamp"
 sed -E -i "s#root=[^[:space:]]+#root=UUID=$root_uuid#g" "$boot_config"
 cp -a "$boot_config" "$evidence/extlinux.conf.after"
 
@@ -99,11 +101,14 @@ touch "$mountpoint/etc/initramfs-tools/modules"
 for module in nvme nvme_core; do
     grep -qxF "$module" "$mountpoint/etc/initramfs-tools/modules" || echo "$module" >>"$mountpoint/etc/initramfs-tools/modules"
 done
+mount --bind /boot "$mountpoint/boot"
 for fs in dev proc sys run; do mount --bind "/$fs" "$mountpoint/$fs"; done
 chroot "$mountpoint" update-initramfs -u -k all
-for fs in run sys proc dev; do umount "$mountpoint/$fs"; done
+for fs in run sys proc dev boot; do umount "$mountpoint/$fs"; done
 
-printf 'nvme_root_uuid=%s\nboot_config=%s\n' "$root_uuid" "$boot_config" >"$evidence/result.txt"
+printf 'nvme_root_uuid=%s\nemmc_root_uuid=%s\nboot_config=%s\nrollback_config=%s\n' \
+    "$root_uuid" "$emmc_root_uuid" "$boot_config" \
+    "$boot_config.emmc-root-$stamp" >"$evidence/result.txt"
 sync
 umount "$mountpoint"
 trap - EXIT

@@ -49,3 +49,34 @@
   source warnings.
 - Minimal experiment: remove only the five unused declarations, retain the
   panel-ID and second-init-sequence assertions, and rerun kernel-only CI once.
+
+## HackerGadgets Radxa compatibility gate
+
+- Official AIO2 rail IDs are BCM GPIO 27 (GPS), 16 (LoRa), 7 (SDR), and 23
+  (internal USB). HackerGadgets documents that each rail is active-high and
+  that internal USB must be enabled for the AC1200 module.
+- Rex explicitly confirms the official `aiov2_ctl`/`pinctrl` path was written
+  for Raspberry Pi and does not directly control Radxa pins.
+- The pinned Radxa carrier DTS maps those standard header positions as:
+  BCM27 / physical 13 -> gpio1 PC5, BCM16 / physical 36 -> gpio1 PA4,
+  BCM7 / physical 26 -> gpio1 PB5, BCM23 / physical 16 -> gpio1 PA7.
+- Supported implementation: a `gpio-leds` overlay owns those four Radxa lines,
+  while a Radxa-model-guarded `/usr/local/bin/pinctrl` shim translates only the
+  AIO2 controller's `get` and `set ... op dh|dl` calls. It refuses every other
+  model and every other GPIO.
+- Boot policy: SDR and internal USB on; GPS and LoRa off; Meshtastic daemon
+  disabled until LoRa is explicitly powered.
+- Runtime gate after flash: all four LED-class rails present, SDR/USB high,
+  AC1200 enumerated with a network interface, AIO2 unit enabled, RTC readable.
+
+## SHTF-box package gate
+
+- No public GitHub release asset currently exists. Do not use an unpinned
+  `latest` URL or build the package on the operator workstation.
+- Image CI checks out SHTF-box commit
+  `0dedd41e3a6f5354c91f3e3769f21184835386ff`, cross-builds its ARM64 Debian
+  package, extracts it, and asserts all six expected AArch64 binaries.
+- The package is installed only inside the image chroot with `policy-rc.d`
+  blocking service starts. SHTF services remain disabled for first OS boot;
+  binaries, configs, and storage directories are present for later provisioning
+  after NVMe-root validation.

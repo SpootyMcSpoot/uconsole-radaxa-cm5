@@ -15,15 +15,46 @@ has_nvme() { nvme list 2>/dev/null | grep -q /dev/nvme; }
 package_ok() { dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q 'install ok installed'; }
 storage_ok() { [[ -d /srv/shtf-box/packages && -f /etc/shtf-box/storage.env ]]; }
 systemd_ok() { [[ $(systemctl --failed --no-legend 2>/dev/null | wc -l) -eq 0 ]]; }
+boot_points_to_root() {
+    local uuid
+    uuid=$(findmnt -n -o UUID /)
+    grep -Eq "(^|[[:space:]])root=UUID=$uuid([[:space:]]|$)" /boot/extlinux/extlinux.conf
+}
+panel_backlight_ok() { compgen -G '/sys/class/backlight/*/brightness' >/dev/null; }
+rail_high() { pinctrl get "$1" 2>/dev/null | grep -qw hi; }
+rtc_ok() { hwclock --show >/dev/null 2>&1; }
+wifi_usb_ok() { lsusb | grep -Eqi 'MediaTek|MT7921|0e8d:'; }
+wifi_interface_ok() { iw dev 2>/dev/null | grep -q 'Interface'; }
+aio2_service_ok() { systemctl is-enabled --quiet aiov2-rails-boot.service; }
+shtf_tools_ok() {
+    local binary
+    for binary in shtf-box shtf-gui-htmx shtf-gps shtf-sensors shtf-lora shtf-power; do
+        [[ -x /usr/local/bin/$binary ]] || return 1
+    done
+}
 
 check "aarch64" test "$(uname -m)" = aarch64
 check "Radxa CM5 model" is_radxa
 check "root on NVMe" root_on_nvme
 check "NVMe device" has_nvme
+check "eMMC boot points to NVMe root" boot_points_to_root
+check "panel backlight" panel_backlight_ok
 check "MT7921 USB driver" modinfo mt7921u
 check "HackerGadgets package" package_ok hackergadgets-uconsole-aio-board
 check "Meshtastic UI package" package_ok meshtastic-mui
 check "SDR package" package_ok sdrpp-brown
+check "tar1090 package" package_ok tar1090
+check "PyGPSClient package" package_ok pygpsclient
+check "AIO2 controller" test -x /usr/local/bin/aiov2_ctl
+check "Radxa pinctrl shim" test -x /usr/local/bin/pinctrl
+check "AIO2 rail service" aio2_service_ok
+check "SDR rail high" rail_high 7
+check "internal USB rail high" rail_high 23
+check "AC1200 USB device" wifi_usb_ok
+check "AC1200 network interface" wifi_interface_ok
+check "RTC" rtc_ok
+check "SHTF-box package" package_ok shtf-box
+check "SHTF-box ARM64 tools" shtf_tools_ok
 check "SHTF storage" storage_ok
 check "no failed systemd units" systemd_ok
 exit "$fail"

@@ -34,6 +34,12 @@ env:
   OVERLAYS_REPO: dev-null2019/radxa-cm5-uconsole
   OVERLAYS_REF: c2204834e1d7d0acfd64e1b7874d432bc142f1a4
   KERNEL_REPO: ak-rex/ClockworkRadxa-linux
+  AIOV2_CTL_REPO: hackergadgets/aiov2_ctl
+  AIOV2_CTL_REF: c21ca742775b32ecea30b334e15a2d7f003e511a
+  SHTF_REPO: Anomalous-Ventures/shtf-box
+  SHTF_REF: 0dedd41e3a6f5354c91f3e3769f21184835386ff
+  SHTF_VERSION: 0.0.0~uconsole.0dedd41
+  DEBIAN_IMAGE_SIZE_GIB: 12
 
 jobs:
   # ============================================================
@@ -129,7 +135,9 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y wget xz-utils kmod cpio rsync dosfstools parted qemu-user-static binfmt-support pixz gcc device-tree-compiler
+          sudo apt-get install -y wget xz-utils kmod cpio rsync dosfstools parted gdisk \
+            cloud-guest-utils qemu-user-static binfmt-support pixz gcc device-tree-compiler \
+            dpkg-dev debhelper
 
       - name: Checkout pinned overlays
         uses: actions/checkout@v4
@@ -137,6 +145,27 @@ jobs:
           repository: ${{ env.OVERLAYS_REPO }}
           ref: ${{ env.OVERLAYS_REF }}
           path: overlay-source
+
+      - name: Checkout pinned HackerGadgets AIO2 controller
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.AIOV2_CTL_REPO }}
+          ref: ${{ env.AIOV2_CTL_REF }}
+          path: aiov2-source
+
+      - name: Checkout pinned SHTF-box sources
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.SHTF_REPO }}
+          ref: ${{ env.SHTF_REF }}
+          path: shtf-source
+          submodules: false
+
+      - name: Set up Go for SHTF-box ARM64 package
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: shtf-source/go.mod
+          cache-dependency-path: shtf-source/go.sum
 
       - name: Compile pinned overlays
         run: |
@@ -147,7 +176,24 @@ jobs:
               -undef -D__DTS__ -x assembler-with-cpp "$dts" | \
               dtc -@ -I dts -O dtb -o "compiled_overlays/${basename}.dtbo" -
           done
-          test "$(find compiled_overlays -maxdepth 1 -type f -name '*.dtbo' | wc -l)" -eq 3
+          gcc -E -nostdinc -Ioverlay-source/devicetree_overlays \
+            -undef -D__DTS__ -x assembler-with-cpp scripts/dts/aio2_radxa_rails.dts | \
+            dtc -@ -I dts -O dtb -o compiled_overlays/aio2_radxa_rails.dtbo -
+          test "$(find compiled_overlays -maxdepth 1 -type f -name '*.dtbo' | wc -l)" -eq 4
+
+      - name: Build and inspect pinned SHTF-box ARM64 package
+        run: |
+          test "$(git -C shtf-source rev-parse HEAD)" = "${SHTF_REF}"
+          cd shtf-source
+          ./scripts/build-deb.sh --version="${SHTF_VERSION}"
+          mapfile -t SHTF_DEBS < <(find packaging/dist -maxdepth 1 -type f -name 'shtf-box_*_arm64.deb' -print)
+          test "${#SHTF_DEBS[@]}" -eq 1
+          mkdir -p /tmp/shtf-deb-inspect
+          dpkg-deb -x "${SHTF_DEBS[0]}" /tmp/shtf-deb-inspect
+          for binary in shtf-box shtf-gui-htmx shtf-gps shtf-sensors shtf-lora shtf-power; do
+            test -x "/tmp/shtf-deb-inspect/usr/local/bin/$binary"
+            file "/tmp/shtf-deb-inspect/usr/local/bin/$binary" | grep -q 'ARM aarch64'
+          done
 
       - name: Download current-run kernel artifacts
         if: ${{ inputs.reuse_kernel_run_id == '' }}
@@ -171,9 +217,21 @@ jobs:
 
       - name: Mount and modify image
         run: |
-          sudo losetup -fP debian.img
-          export LOOP_DEVICE=$(losetup -a | grep debian.img | cut -d: -f1)
+          test "$(git -C aiov2-source rev-parse HEAD)" = "${AIOV2_CTL_REF}"
+          truncate -s "${DEBIAN_IMAGE_SIZE_GIB}G" debian.img
+          export LOOP_DEVICE
+          LOOP_DEVICE=$(sudo losetup --find --show --partscan debian.img)
           echo "Loop device: $LOOP_DEVICE"
+
+          # Move the backup GPT, grow only the root partition, then expand its
+          # ext4 filesystem. The 12-GiB image is well below the detected
+          # 488,554,496-sector (~233-GiB) CM5 eMMC.
+          sudo sgdisk -e "$LOOP_DEVICE"
+          sudo growpart "$LOOP_DEVICE" 3
+          sudo partprobe "$LOOP_DEVICE"
+          sudo udevadm settle
+          sudo e2fsck -f -y "${LOOP_DEVICE}p3" || test "$?" -eq 1
+          sudo resize2fs "${LOOP_DEVICE}p3"
 
           # rsdk-b3 uses p1=config (FAT16), p2=efi (FAT16), p3=rootfs
           # (ext4). Probe filesystems directly: lsblk's udev-backed LABEL can
@@ -208,6 +266,15 @@ jobs:
             ./mnt/root/usr/local/sbin/uconsole-install-hackergadgets
           sudo install -D -m 0755 scripts/target/uconsole-validate-hardware \
             ./mnt/root/usr/local/sbin/uconsole-validate-hardware
+          sudo install -D -m 0755 scripts/target/pinctrl \
+            ./mnt/root/usr/local/bin/pinctrl
+          mapfile -t SHTF_DEBS < <(
+            find shtf-source/packaging/dist -maxdepth 1 -type f -name 'shtf-box_*_arm64.deb' -print
+          )
+          test "${#SHTF_DEBS[@]}" -eq 1
+          sudo install -m 0644 "${SHTF_DEBS[0]}" ./mnt/root/tmp/
+          sudo install -d -m 0755 ./mnt/root/opt/hackergadgets
+          sudo rsync -a aiov2-source/ ./mnt/root/opt/hackergadgets/aiov2_ctl/
 
           # Configure AK-Rex's signed ARM repository without running its board
           # maintainer scripts during image assembly.
@@ -234,6 +301,15 @@ jobs:
           fi
           sudo cp --remove-destination /etc/resolv.conf ./mnt/root/etc/resolv.conf
 
+          # Never start target services during offline assembly. This guard and
+          # every package/controller command below exist strictly in the arm64
+          # image chroot, never on the GitHub runner or operator workstation.
+          cat <<'EOF' | sudo tee ./mnt/root/usr/sbin/policy-rc.d >/dev/null
+          #!/bin/sh
+          exit 101
+          EOF
+          sudo chmod 0755 ./mnt/root/usr/sbin/policy-rc.d
+
           # Radxa's u-boot-menu prepends the mounted /boot path when /boot is a
           # separate filesystem, so its overlay directory must be boot-relative.
           # Stage overlays before kernel hooks generate extlinux.conf.
@@ -242,7 +318,7 @@ jobs:
           sudo sed -i -E '/^[[:space:]]*U_BOOT_FDT_OVERLAYS(_DIR)?=/d' \
             ./mnt/root/etc/default/u-boot
           cat <<'EOF' | sudo tee -a ./mnt/root/etc/default/u-boot >/dev/null
-          U_BOOT_FDT_OVERLAYS="axp20x.dtbo cwu50_panel.dtbo displaystuff.dtbo"
+          U_BOOT_FDT_OVERLAYS="axp20x.dtbo cwu50_panel.dtbo displaystuff.dtbo aio2_radxa_rails.dtbo"
           U_BOOT_FDT_OVERLAYS_DIR="/dtbo"
           EOF
 
@@ -257,14 +333,52 @@ jobs:
             export DEBIAN_FRONTEND=noninteractive
             cd /tmp
             dpkg -i linux-image-*.deb || apt-get install -f -y --no-upgrade
-            rm -f /tmp/*.deb
+            rm -f /tmp/linux-image-*.deb
             apt-get clean
             apt-get update
-            apt-get install -y --no-install-recommends --no-upgrade \
+            apt-get install -y --no-upgrade \
               gdisk parted e2fsprogs rsync nvme-cli smartmontools pciutils usbutils i2c-tools \
               iw wireless-tools wpasupplicant rfkill firmware-mediatek rtl-sdr \
-              openssh-server ca-certificates curl gnupg
+              rtl-433 gpsd gpsd-clients openssh-server ca-certificates curl gnupg sudo git \
+              podman gpiod pinctrl python3 python3-pyqt6 bash-completion
+            cd /opt/hackergadgets/aiov2_ctl
+            python3 aiov2_ctl.py --install
+            cat >/usr/local/share/aiov2_ctl/config.json <<'AIO2_EOF'
+          {
+            "rails_on_boot": {
+              "GPS": false,
+              "LORA": false,
+              "SDR": true,
+              "USB": true
+            },
+            "mesh_on_boot": false
+          }
+          AIO2_EOF
+            /usr/local/bin/aiov2_ctl --add-apps
+            apt-get install -y --install-recommends --no-upgrade \
+              hackergadgets-uconsole-aio-board meshtastic-mui sdrpp-brown \
+              tar1090 pygpsclient
+            apt-get install -y --no-install-recommends --no-upgrade \
+              /tmp/shtf-box_*_arm64.deb
             systemctl enable ssh
+            systemctl enable aiov2-rails-boot.service
+            systemctl disable meshtasticd.service 2>/dev/null || true
+            systemctl disable shtf-box.service shtf-box-power.service \
+              shtf-box-gps.service shtf-box-sensors.service shtf-box-mesh.service \
+              2>/dev/null || true
+            install -d -m 0755 \
+              /srv/shtf-box/packages /srv/shtf-box/data /srv/shtf-box/cache \
+              /srv/shtf-box/models /srv/shtf-box/maps /srv/shtf-box/backups \
+              /etc/shtf-box
+            cat >/etc/shtf-box/storage.env <<'SHTF_EOF'
+          SHTF_ROOT=/srv/shtf-box
+          SHTF_DATA=/srv/shtf-box/data
+          SHTF_CACHE=/srv/shtf-box/cache
+          SHTF_MODELS=/srv/shtf-box/models
+          SHTF_MAPS=/srv/shtf-box/maps
+          SHTF_EOF
+            rm -f /usr/sbin/policy-rc.d
+            rm -f /tmp/shtf-box_*_arm64.deb
             apt-get clean
           "
           sudo rm -f ./mnt/root/etc/resolv.conf
@@ -272,21 +386,35 @@ jobs:
             sudo mv ./mnt/root/etc/resolv.conf.image-build ./mnt/root/etc/resolv.conf
           fi
 
-          for package in nvme-cli smartmontools firmware-mediatek rtl-sdr openssh-server; do
+          for package in nvme-cli smartmontools firmware-mediatek rtl-sdr openssh-server \
+            hackergadgets-uconsole-aio-board meshtastic-mui sdrpp-brown tar1090 \
+            pygpsclient pinctrl gpiod python3-pyqt6 podman; do
             sudo chroot ./mnt/root dpkg-query -W -f='${db:Status-Abbrev}' "$package" | grep -qx 'ii '
           done
+          sudo chroot ./mnt/root dpkg-query -W -f='${db:Status-Abbrev}' shtf-box | grep -qx 'ii '
           FREE_KIB=$(df --output=avail -k ./mnt/root | tail -n 1 | xargs)
-          test "$FREE_KIB" -ge 262144
+          test "$FREE_KIB" -ge 4194304
 
           # Static image contract: target helpers, signed repo, Wi-Fi firmware,
           # and boot files must exist before publishing.
           sudo test -x ./mnt/root/usr/local/sbin/uconsole-bootstrap-nvme-root
           sudo test -x ./mnt/root/usr/local/sbin/uconsole-install-hackergadgets
           sudo test -x ./mnt/root/usr/local/sbin/uconsole-validate-hardware
+          sudo test -x ./mnt/root/usr/local/bin/aiov2_ctl
+          sudo test -x ./mnt/root/usr/local/bin/pinctrl
+          sudo test -s ./mnt/root/usr/local/share/aiov2_ctl/config.json
+          sudo test -s ./mnt/root/etc/systemd/system/aiov2-rails-boot.service
+          sudo test -L ./mnt/root/etc/systemd/system/multi-user.target.wants/aiov2-rails-boot.service
           sudo test -s ./mnt/root/usr/share/keyrings/ak-rex.gpg
           sudo test -d ./mnt/root/lib/firmware/mediatek
+          sudo test -d ./mnt/root/srv/shtf-box/packages
+          sudo test -s ./mnt/root/etc/shtf-box/storage.env
+          for binary in shtf-box shtf-gui-htmx shtf-gps shtf-sensors shtf-lora shtf-power; do
+            sudo test -x "./mnt/root/usr/local/bin/$binary"
+          done
+          sudo test ! -e ./mnt/root/usr/sbin/policy-rc.d
           sudo test -d ./mnt/root/boot/extlinux
-          for overlay in axp20x.dtbo cwu50_panel.dtbo displaystuff.dtbo; do
+          for overlay in axp20x.dtbo cwu50_panel.dtbo displaystuff.dtbo aio2_radxa_rails.dtbo; do
             sudo test -s "./mnt/root/boot/dtbo/$overlay"
             sudo grep -Eq "^[[:space:]]*fdtoverlays .* /dtbo/$overlay([[:space:]]|$)" \
               ./mnt/root/boot/extlinux/extlinux.conf

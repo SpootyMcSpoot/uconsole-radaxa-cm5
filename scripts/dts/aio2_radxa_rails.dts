@@ -1,0 +1,52 @@
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/pinctrl/rockchip.h>
+
+/ {
+	metadata {
+		title = "HackerGadgets AIO2 rails for Radxa CM5";
+		compatible = "radxa,cm5-rpi-cm4-io";
+		description = "Expose AIO2 power rails through gpio-leds";
+	};
+
+	fragment@0 {
+		target-path = "/";
+
+		__overlay__ {
+			/*
+			 * HackerGadgets BCM -> 40-pin header -> Radxa gpio1 mapping:
+			 * GPS 27 -> pin 13 -> PC5, LORA 16 -> pin 36 -> PA4,
+			 * SDR 7 -> pin 26 -> PB5, USB 23 -> pin 16 -> PA7.
+			 */
+			aio2_rails: aio2-rails {
+				compatible = "gpio-leds";
+
+				aio2_gps: gps {
+					label = "aio2-gps";
+					gpios = <&gpio1 RK_PC5 GPIO_ACTIVE_HIGH>;
+					default-state = "off";
+				};
+
+				aio2_lora: lora {
+					label = "aio2-lora";
+					gpios = <&gpio1 RK_PA4 GPIO_ACTIVE_HIGH>;
+					default-state = "off";
+				};
+
+				aio2_sdr: sdr {
+					label = "aio2-sdr";
+					gpios = <&gpio1 RK_PB5 GPIO_ACTIVE_HIGH>;
+					default-state = "on";
+				};
+
+				aio2_usb: usb {
+					label = "aio2-usb";
+					gpios = <&gpio1 RK_PA7 GPIO_ACTIVE_HIGH>;
+					default-state = "on";
+				};
+			};
+		};
+	};
+};

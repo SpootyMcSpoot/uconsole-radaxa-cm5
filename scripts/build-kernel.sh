@@ -69,6 +69,34 @@ export ARCH
 export CROSS_COMPILE
 make rockchip_linux_defconfig
 
+./scripts/config --enable CONFIG_PCI
+./scripts/config --enable CONFIG_PCIEPORTBUS
+./scripts/config --enable CONFIG_PCIE_ROCKCHIP
+./scripts/config --enable CONFIG_PCIE_ROCKCHIP_HOST
+./scripts/config --enable CONFIG_NVME_CORE
+./scripts/config --enable CONFIG_BLK_DEV_NVME
+./scripts/config --module CONFIG_MT76
+./scripts/config --module CONFIG_MT76_USB
+./scripts/config --module CONFIG_MT792x_LIB
+./scripts/config --module CONFIG_MT7921_COMMON
+./scripts/config --module CONFIG_MT7921U
+./scripts/config --module CONFIG_BT_HCIBTUSB
+./scripts/config --enable CONFIG_BT_HCIBTUSB_MTK
+./scripts/config --module CONFIG_DRM_PANEL_CWU50
+./scripts/config --enable CONFIG_NEW_LEDS
+./scripts/config --enable CONFIG_LEDS_CLASS
+./scripts/config --enable CONFIG_LEDS_GPIO
+make olddefconfig
+
+for symbol in BLK_DEV_NVME MT7921U BT_HCIBTUSB DRM_PANEL_CWU50 LEDS_GPIO; do
+    grep -Eq "^CONFIG_${symbol}=(y|m)$" .config || {
+        echo "Required kernel symbol CONFIG_${symbol} missing" >&2
+        exit 1
+    }
+done
+grep -q 'cwu50_init_sequence2' drivers/gpu/drm/panel/panel-cwu50.c
+grep -q 'is_new_panel' drivers/gpu/drm/panel/panel-cwu50.c
+
 log_info "Building kernel (this will take 30-45 minutes)..."
 make -j"$(nproc)" Image modules dtbs
 

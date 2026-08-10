@@ -1,0 +1,48 @@
+#!/bin/bash
+set -Eeuo pipefail
+
+model_path="${UCONSOLE_MODEL_PATH:-/proc/device-tree/model}"
+led_root="${AIO2_LED_ROOT:-/sys/class/leds}"
+model=$(tr -d '\0' <"$model_path" 2>/dev/null || true)
+grep -Eqi 'radxa.*cm5|rk3588s' <<<"$model" || {
+    echo "Refusing GPIO access: not a Radxa CM5 ($model)" >&2
+    exit 1
+}
+
+usage() {
+    echo "Usage: pinctrl get PIN | pinctrl set PIN op dh|dl" >&2
+    exit 2
+}
+
+rail_path() {
+    case "$1" in
+        27) printf '%s/aio2-gps/brightness\n' "$led_root" ;;
+        16) printf '%s/aio2-lora/brightness\n' "$led_root" ;;
+        7) printf '%s/aio2-sdr/brightness\n' "$led_root" ;;
+        23) printf '%s/aio2-usb/brightness\n' "$led_root" ;;
+        *) echo "Unsupported AIO2 BCM GPIO: $1" >&2; exit 2 ;;
+    esac
+}
+
+case "${1:-}" in
+    get)
+        [[ $# -eq 2 ]] || usage
+        path=$(rail_path "$2")
+        [[ -r $path ]] || { echo "AIO2 rail unavailable: $path" >&2; exit 1; }
+        value=$(<"$path")
+        if [[ $value == 0 ]]; then level=lo; else level=hi; fi
+        printf '%s: op %s\n' "$2" "$level"
+        ;;
+    set)
+        [[ $# -eq 4 && $3 == op ]] || usage
+        path=$(rail_path "$2")
+        [[ -w $path ]] || { echo "AIO2 rail unavailable: $path" >&2; exit 1; }
+        case "$4" in
+            dh) value=1 ;;
+            dl) value=0 ;;
+            *) usage ;;
+        esac
+        printf '%s\n' "$value" >"$path"
+        ;;
+    *) usage ;;
+esac

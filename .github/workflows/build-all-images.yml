@@ -36,9 +36,6 @@ env:
   KERNEL_REPO: ak-rex/ClockworkRadxa-linux
   AIOV2_CTL_REPO: hackergadgets/aiov2_ctl
   AIOV2_CTL_REF: c21ca742775b32ecea30b334e15a2d7f003e511a
-  SHTF_REPO: Anomalous-Ventures/shtf-box
-  SHTF_REF: 0dedd41e3a6f5354c91f3e3769f21184835386ff
-  SHTF_VERSION: 0.0.0~uconsole.0dedd41
   DEBIAN_IMAGE_SIZE_GIB: 12
 
 jobs:
@@ -136,8 +133,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y wget xz-utils kmod cpio rsync dosfstools parted gdisk \
-            cloud-guest-utils qemu-user-static binfmt-support pixz gcc device-tree-compiler \
-            dpkg-dev debhelper
+            cloud-guest-utils qemu-user-static binfmt-support pixz gcc device-tree-compiler
 
       - name: Checkout pinned overlays
         uses: actions/checkout@v4
@@ -153,20 +149,6 @@ jobs:
           ref: ${{ env.AIOV2_CTL_REF }}
           path: aiov2-source
 
-      - name: Checkout pinned SHTF-box sources
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ env.SHTF_REPO }}
-          ref: ${{ env.SHTF_REF }}
-          path: shtf-source
-          submodules: false
-
-      - name: Set up Go for SHTF-box ARM64 package
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: shtf-source/go.mod
-          cache-dependency-path: shtf-source/go.sum
-
       - name: Compile pinned overlays
         run: |
           mkdir -p compiled_overlays
@@ -180,20 +162,6 @@ jobs:
             -undef -D__DTS__ -x assembler-with-cpp scripts/dts/aio2_radxa_rails.dts | \
             dtc -@ -I dts -O dtb -o compiled_overlays/aio2_radxa_rails.dtbo -
           test "$(find compiled_overlays -maxdepth 1 -type f -name '*.dtbo' | wc -l)" -eq 4
-
-      - name: Build and inspect pinned SHTF-box ARM64 package
-        run: |
-          test "$(git -C shtf-source rev-parse HEAD)" = "${SHTF_REF}"
-          cd shtf-source
-          ./scripts/build-deb.sh --version="${SHTF_VERSION}"
-          mapfile -t SHTF_DEBS < <(find packaging/dist -maxdepth 1 -type f -name 'shtf-box_*_arm64.deb' -print)
-          test "${#SHTF_DEBS[@]}" -eq 1
-          mkdir -p /tmp/shtf-deb-inspect
-          dpkg-deb -x "${SHTF_DEBS[0]}" /tmp/shtf-deb-inspect
-          for binary in shtf-box shtf-gui-htmx shtf-gps shtf-sensors shtf-lora shtf-power; do
-            test -x "/tmp/shtf-deb-inspect/usr/local/bin/$binary"
-            file "/tmp/shtf-deb-inspect/usr/local/bin/$binary" | grep -q 'ARM aarch64'
-          done
 
       - name: Download current-run kernel artifacts
         if: ${{ inputs.reuse_kernel_run_id == '' }}
@@ -268,11 +236,6 @@ jobs:
             ./mnt/root/usr/local/sbin/uconsole-validate-hardware
           sudo install -D -m 0755 scripts/target/pinctrl \
             ./mnt/root/usr/local/bin/pinctrl
-          mapfile -t SHTF_DEBS < <(
-            find shtf-source/packaging/dist -maxdepth 1 -type f -name 'shtf-box_*_arm64.deb' -print
-          )
-          test "${#SHTF_DEBS[@]}" -eq 1
-          sudo install -m 0644 "${SHTF_DEBS[0]}" ./mnt/root/tmp/
           sudo install -d -m 0755 ./mnt/root/opt/hackergadgets
           sudo rsync -a aiov2-source/ ./mnt/root/opt/hackergadgets/aiov2_ctl/
 
@@ -358,14 +321,9 @@ jobs:
             apt-get install -y --install-recommends --no-upgrade \
               hackergadgets-uconsole-aio-board meshtastic-mui sdrpp-brown \
               tar1090 pygpsclient
-            apt-get install -y --no-install-recommends --no-upgrade \
-              /tmp/shtf-box_*_arm64.deb
             systemctl enable ssh
             systemctl enable aiov2-rails-boot.service
             systemctl disable meshtasticd.service 2>/dev/null || true
-            systemctl disable shtf-box.service shtf-box-power.service \
-              shtf-box-gps.service shtf-box-sensors.service shtf-box-mesh.service \
-              2>/dev/null || true
             install -d -m 0755 \
               /srv/shtf-box/packages /srv/shtf-box/data /srv/shtf-box/cache \
               /srv/shtf-box/models /srv/shtf-box/maps /srv/shtf-box/backups \
@@ -376,9 +334,8 @@ jobs:
           SHTF_CACHE=/srv/shtf-box/cache
           SHTF_MODELS=/srv/shtf-box/models
           SHTF_MAPS=/srv/shtf-box/maps
-          SHTF_EOF
+            SHTF_EOF
             rm -f /usr/sbin/policy-rc.d
-            rm -f /tmp/shtf-box_*_arm64.deb
             apt-get clean
           "
           sudo rm -f ./mnt/root/etc/resolv.conf
@@ -391,7 +348,6 @@ jobs:
             pygpsclient pinctrl gpiod python3-pyqt6 podman; do
             sudo chroot ./mnt/root dpkg-query -W -f='${db:Status-Abbrev}' "$package" | grep -qx 'ii '
           done
-          sudo chroot ./mnt/root dpkg-query -W -f='${db:Status-Abbrev}' shtf-box | grep -qx 'ii '
           FREE_KIB=$(df --output=avail -k ./mnt/root | tail -n 1 | xargs)
           test "$FREE_KIB" -ge 4194304
 
@@ -409,9 +365,6 @@ jobs:
           sudo test -d ./mnt/root/lib/firmware/mediatek
           sudo test -d ./mnt/root/srv/shtf-box/packages
           sudo test -s ./mnt/root/etc/shtf-box/storage.env
-          for binary in shtf-box shtf-gui-htmx shtf-gps shtf-sensors shtf-lora shtf-power; do
-            sudo test -x "./mnt/root/usr/local/bin/$binary"
-          done
           sudo test ! -e ./mnt/root/usr/sbin/policy-rc.d
           sudo test -d ./mnt/root/boot/extlinux
           for overlay in axp20x.dtbo cwu50_panel.dtbo displaystuff.dtbo aio2_radxa_rails.dtbo; do

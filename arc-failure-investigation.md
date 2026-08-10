@@ -73,10 +73,11 @@
 
 - No public GitHub release asset currently exists. Do not use an unpinned
   `latest` URL or build the package on the operator workstation.
-- Image CI checks out SHTF-box commit
-  `0dedd41e3a6f5354c91f3e3769f21184835386ff`, cross-builds its ARM64 Debian
-  package, extracts it, and asserts all six expected AArch64 binaries.
-- The package is installed only inside the image chroot with `policy-rc.d`
-  blocking service starts. SHTF services remain disabled for first OS boot;
-  binaries, configs, and storage directories are present for later provisioning
-  after NVMe-root validation.
+- Diagnostic run `31360040321` proved the SHTF-box repository is private: the
+  public image repository's scoped `GITHUB_TOKEN` received `Repository not
+  found`, and the image repository has no cross-repository secret.
+- Do not publish private source/binaries into the public image repository and
+  do not store a broad personal token there. The image instead prepares
+  `/srv/shtf-box/{packages,data,cache,models,maps,backups}` and
+  `/etc/shtf-box/storage.env`; the private ARM64 package can be loaded after
+  NVMe-root validation.

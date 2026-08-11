@@ -393,6 +393,20 @@ jobs:
             sudo mv ./mnt/root/etc/resolv.conf.image-build ./mnt/root/etc/resolv.conf
           fi
 
+          # PyGPSClient's upstream installer creates only a per-user venv and
+          # appends it to the interactive shell PATH. Provide the system-wide
+          # command advertised by the HackerGadgets package without executing
+          # target code on the runner.
+          PYGPSCLIENT_VENV="/home/${TARGET_USER}/.pygpsclient/bin/pygpsclient"
+          PYGPSCLIENT_IMAGE_PATH="./mnt/root${PYGPSCLIENT_VENV}"
+          if [ "$TARGET_USER" = root ]; then
+            # /home/root is an absolute target-side link to /root. Avoid
+            # following that link into the GitHub runner's own /root here.
+            PYGPSCLIENT_IMAGE_PATH=./mnt/root/root/.pygpsclient/bin/pygpsclient
+          fi
+          sudo test -x "$PYGPSCLIENT_IMAGE_PATH"
+          sudo ln -sfn "$PYGPSCLIENT_VENV" ./mnt/root/usr/local/bin/pygpsclient
+
           for package in nvme-cli smartmontools firmware-mediatek rtl-sdr openssh-server \
             hackergadgets-uconsole-aio-board meshtastic-mui sdrpp-brown tar1090 \
             pygpsclient pinctrl gpiod python3-pyqt6 python3-venv podman; do
@@ -411,7 +425,9 @@ jobs:
           sudo test -x ./mnt/root/usr/local/sbin/uconsole-validate-hardware
           sudo test -x ./mnt/root/usr/local/bin/aiov2_ctl
           sudo test -x ./mnt/root/usr/local/bin/pinctrl
-          sudo test -x ./mnt/root/usr/local/bin/pygpsclient
+          sudo test -L ./mnt/root/usr/local/bin/pygpsclient
+          test "$(sudo readlink ./mnt/root/usr/local/bin/pygpsclient)" = "$PYGPSCLIENT_VENV"
+          sudo test -x "$PYGPSCLIENT_IMAGE_PATH"
           sudo test -s ./mnt/root/usr/local/share/aiov2_ctl/config.json
           sudo test -s ./mnt/root/etc/systemd/system/aiov2-rails-boot.service
           sudo test -L ./mnt/root/etc/systemd/system/multi-user.target.wants/aiov2-rails-boot.service

@@ -1,5 +1,21 @@
 # ARC: Radxa CM5 uConsole black screen
 
+## Evidence-first operating protocol
+
+1. Capture exact gate, command, revision, inputs, and durable log before edits.
+2. Record competing contract, configuration, infrastructure, data/state, and
+   implementation hypotheses.
+3. Run smallest read-only experiment that separates leading hypotheses.
+4. Apply only fix supported by evidence; define expected pass signal first.
+5. Run narrow local validation, then failed CI gate once.
+6. After any repeated failure, update this ledger and inspect preserved evidence;
+   never start another full run without new diagnostic evidence or a relevant fix.
+7. Report state as verified, failed, or unknown. Never claim flashed, installed,
+   or validated without corresponding artifact, readback, or target runtime test.
+8. Never execute target package/configuration scripts on operator host
+   `bugoutbox` (`192.168.0.10`). Offline target execution is limited to CI chroot;
+   hardware configuration runs only after positive target identity verification.
+
 ## Failure capture
 
 - Gate: first hardware boot after full eMMC flash/readback
@@ -232,3 +248,22 @@
   link breaks the launcher; retargeting only the outer symlink cannot fix shebangs.
 - Minimal fix: retain and assert `/home/root -> /root`, which preserves the path
   contract of the upstream installer without changing root's passwd home field.
+
+### PyGPSClient launcher contract correction
+
+- Gate: Debian image run `31516734551`, commit `f7bf0a8`, static-file assertions.
+- Exact failure repeated: `sudo test -x ./mnt/root/usr/local/bin/pygpsclient`.
+- Contract hypothesis confirmed by pinned upstream installer source: it creates
+  `/home/<user>/.pygpsclient/bin/pygpsclient` and edits interactive shell PATH;
+  it never creates `/usr/local/bin/pygpsclient`.
+- Previous shebang-only root cause was incomplete. Retaining `/home/root -> /root`
+  preserves venv shebangs but cannot create a missing system launcher.
+- Infrastructure, package-state, and space hypotheses ruled out: package was
+  `ii`, pip install completed, cleanup completed, and 6,529,884 KiB remained.
+- Smallest discriminating experiment: source search found no launcher creation;
+  only workflow assertion referenced `/usr/local/bin/pygpsclient`.
+- Minimal fix: create an absolute target-side symlink from `/usr/local/bin/pygpsclient`
+  to the selected user's venv executable. Assert link target and venv executable
+  separately without invoking ARM target code on the runner. For root-only images,
+  inspect physical mounted path `/root/.pygpsclient/...`; host-side traversal of
+  image link `/home/root -> /root` would otherwise escape into runner `/root`.

@@ -221,3 +221,14 @@
 - Minimal diagnostic: retain only the required logname diversion; add an ERR
   trap, named package assertions, cleanup markers, and the exact free-space value.
   Do not rerun again without an exact failing command.
+
+### PyGPSClient launcher assertion
+
+- Gate: Debian image run `31514590684`, first static-file assertion group.
+- Confirmed: chroot cleanup completed, every named package is `ii`, and root has
+  6,529,884 KiB free. Exact failure: `/usr/local/bin/pygpsclient` not executable.
+- Root cause: the venv was created through `/home/root -> /root`, so generated
+  shebangs embed `/home/root/.pygpsclient/bin/python3`. Removing that compatibility
+  link breaks the launcher; retargeting only the outer symlink cannot fix shebangs.
+- Minimal fix: retain and assert `/home/root -> /root`, which preserves the path
+  contract of the upstream installer without changing root's passwd home field.

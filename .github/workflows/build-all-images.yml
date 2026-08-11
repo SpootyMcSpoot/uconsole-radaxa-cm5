@@ -364,9 +364,6 @@ jobs:
             apt-get install -y --install-recommends --no-upgrade \
               hackergadgets-uconsole-aio-board meshtastic-mui sdrpp-brown \
               tar1090 pygpsclient
-            if [ "$TARGET_USER" = root ]; then
-              ln -sfn /root/.pygpsclient/bin/pygpsclient /usr/local/bin/pygpsclient
-            fi
             systemctl enable ssh
             systemctl enable aiov2-rails-boot.service
             systemctl disable meshtasticd.service 2>/dev/null || true
@@ -389,10 +386,6 @@ jobs:
             apt-get clean
           "
           echo 'Image cleanup: chroot package cleanup complete'
-          if [ "$TARGET_USER" = root ] && \
-             [ "$(sudo readlink ./mnt/root/home/root 2>/dev/null || true)" = /root ]; then
-            sudo rm ./mnt/root/home/root
-          fi
           sudo umount -R ./mnt/root/dev
           sudo umount ./mnt/root/proc
           sudo rm -f ./mnt/root/etc/resolv.conf
@@ -428,7 +421,9 @@ jobs:
           sudo test -s ./mnt/root/etc/shtf-box/storage.env
           sudo test ! -e ./mnt/root/run/readsb/aircraft.json
           sudo test ! -e ./mnt/root/boot/firmware/cmdline.txt
-          sudo test ! -L ./mnt/root/home/root
+          if [ "$TARGET_USER" = root ]; then
+            test "$(sudo readlink ./mnt/root/home/root)" = /root
+          fi
           sudo test -x ./mnt/root/usr/bin/logname
           sudo test -x ./mnt/root/usr/bin/systemctl
           sudo test ! -e ./mnt/root/usr/bin/logname.distrib

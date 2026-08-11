@@ -145,3 +145,16 @@
 - Minimal fix: use the image's UID-1000 identity when present, otherwise `root`
   solely for the temporary `logname` compatibility shim. Log the choice and
   remove the shim before publishing; do not create or change credentials.
+
+### Offline maintainer-script result
+
+- Gate: Debian image run `31461624127`, HackerGadgets application configuration.
+- `pygpsclient` still called the real `/usr/bin/logname`; `/usr/local/sbin` is not
+  in dpkg maintainer scripts' PATH. It then tried `usermod` with an empty user.
+- `tar1090` first installed readsb, but the policy-blocked service could not
+  create `/run/readsb/aircraft.json` without target SDR hardware. Its following
+  tar1090 installer therefore exited 1.
+- Minimal fix: use temporary image-local dpkg diversions for `/usr/bin/logname`
+  and `/usr/bin/systemctl`, seed a valid temporary readsb JSON file, configure
+  packages, then remove the seed and restore both original binaries. `/run` is
+  never bound from the runner, so target scripts cannot contact host systemd.

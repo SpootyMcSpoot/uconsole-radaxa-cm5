@@ -294,17 +294,25 @@ jobs:
           EOF
           sudo chmod 0755 ./mnt/root/usr/sbin/policy-rc.d
 
-          # PyGPSClient's maintainer script assumes an interactive login and
-          # calls logname. Supply the image's UID-1000 account when one exists;
-          # rsdk-b3 is root-only before first boot, so otherwise use root. This
-          # changes no login credentials and the shim is removed before publish.
+          # Third-party maintainer scripts assume a live login and systemd.
+          # Divert their real tools strictly inside the mounted ARM image. /run
+          # is never host-bound, and every temporary file is removed below.
           TARGET_USER=$(awk -F: '$3 == 1000 { print $1; exit }' ./mnt/root/etc/passwd)
           TARGET_USER=${TARGET_USER:-root}
           [[ $TARGET_USER =~ ^[a-z_][a-z0-9_-]*$ ]]
           printf 'Offline package identity: %s\n' "$TARGET_USER"
+          if [ "$TARGET_USER" = root ] && [ ! -e ./mnt/root/home/root ]; then
+            sudo ln -s /root ./mnt/root/home/root
+          fi
+          sudo chroot ./mnt/root dpkg-divert --quiet --local --rename --add /usr/bin/logname
+          sudo chroot ./mnt/root dpkg-divert --quiet --local --rename --add /usr/bin/systemctl
           printf '#!/bin/sh\nprintf "%%s\\n" %q\n' "$TARGET_USER" | \
-            sudo tee ./mnt/root/usr/local/sbin/logname >/dev/null
-          sudo chmod 0755 ./mnt/root/usr/local/sbin/logname
+            sudo tee ./mnt/root/usr/bin/logname >/dev/null
+          printf '#!/bin/sh\nexit 0\n' | sudo tee ./mnt/root/usr/bin/systemctl >/dev/null
+          sudo chmod 0755 ./mnt/root/usr/bin/logname ./mnt/root/usr/bin/systemctl
+          sudo install -d -m 0755 ./mnt/root/run/readsb
+          printf '{"now":0,"messages":0,"aircraft":[]}\n' | \
+            sudo tee ./mnt/root/run/readsb/aircraft.json >/dev/null
 
           # Radxa's u-boot-menu prepends the mounted /boot path when /boot is a
           # separate filesystem, so its overlay directory must be boot-relative.
@@ -369,9 +377,15 @@ jobs:
           SHTF_MAPS=/srv/shtf-box/maps
             SHTF_EOF
             rm -f /usr/sbin/policy-rc.d
-            rm -f /usr/local/sbin/logname
+            rm -f /run/readsb/aircraft.json /usr/bin/logname /usr/bin/systemctl
+            dpkg-divert --quiet --rename --remove /usr/bin/logname
+            dpkg-divert --quiet --rename --remove /usr/bin/systemctl
             apt-get clean
           "
+          if [ "$TARGET_USER" = root ] && \
+             [ "$(sudo readlink ./mnt/root/home/root 2>/dev/null || true)" = /root ]; then
+            sudo rm ./mnt/root/home/root
+          fi
           sudo umount -R ./mnt/root/dev
           sudo umount ./mnt/root/proc
           sudo rm -f ./mnt/root/etc/resolv.conf
@@ -401,7 +415,12 @@ jobs:
           sudo test -d ./mnt/root/lib/firmware/mediatek
           sudo test -d ./mnt/root/srv/shtf-box/packages
           sudo test -s ./mnt/root/etc/shtf-box/storage.env
-          sudo test ! -e ./mnt/root/usr/local/sbin/logname
+          sudo test ! -e ./mnt/root/run/readsb/aircraft.json
+          sudo test ! -L ./mnt/root/home/root
+          sudo test -x ./mnt/root/usr/bin/logname
+          sudo test -x ./mnt/root/usr/bin/systemctl
+          sudo test ! -e ./mnt/root/usr/bin/logname.distrib
+          sudo test ! -e ./mnt/root/usr/bin/systemctl.distrib
           sudo test ! -e ./mnt/root/usr/sbin/policy-rc.d
           sudo test -d ./mnt/root/boot/extlinux
           for overlay in axp20x.dtbo cwu50_panel.dtbo displaystuff.dtbo aio2_radxa_rails.dtbo; do

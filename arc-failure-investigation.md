@@ -187,3 +187,14 @@
 - Radxa uses `/boot/extlinux/extlinux.conf`; that Raspberry token/path is absent.
 - Minimal fix: provide an empty temporary Pi compatibility file during package
   configuration, remove it afterward, and retain assertions on Radxa extlinux.
+
+### Selected-package maintainer-script audit
+
+- Audited all maintainer scripts for `hackergadgets-uconsole-aio-board`,
+  `meshtastic-mui`, `sdrpp-brown`, `tar1090`, `pygpsclient`, and `pinctrl`.
+- No further fatal offline assumptions were found. Raspberry config mutations in
+  the AIO and Meshtastic packages are conditional and exit successfully when
+  Radxa's config paths are absent.
+- One latent root-only-image issue was found: PyGPSClient's launcher points to
+  `/home/root`, which is only a temporary compatibility link. Replace it with
+  `/root/.pygpsclient/bin/pygpsclient` and assert the launcher is executable.

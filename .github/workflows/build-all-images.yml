@@ -365,6 +365,9 @@ jobs:
             apt-get install -y --install-recommends --no-upgrade \
               hackergadgets-uconsole-aio-board meshtastic-mui sdrpp-brown \
               tar1090 pygpsclient
+            if [ "$TARGET_USER" = root ]; then
+              ln -sfn /root/.pygpsclient/bin/pygpsclient /usr/local/bin/pygpsclient
+            fi
             systemctl enable ssh
             systemctl enable aiov2-rails-boot.service
             systemctl disable meshtasticd.service 2>/dev/null || true
@@ -413,6 +416,7 @@ jobs:
           sudo test -x ./mnt/root/usr/local/sbin/uconsole-validate-hardware
           sudo test -x ./mnt/root/usr/local/bin/aiov2_ctl
           sudo test -x ./mnt/root/usr/local/bin/pinctrl
+          sudo test -x ./mnt/root/usr/local/bin/pygpsclient
           sudo test -s ./mnt/root/usr/local/share/aiov2_ctl/config.json
           sudo test -s ./mnt/root/etc/systemd/system/aiov2-rails-boot.service
           sudo test -L ./mnt/root/etc/systemd/system/multi-user.target.wants/aiov2-rails-boot.service

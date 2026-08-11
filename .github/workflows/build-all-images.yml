@@ -345,6 +345,7 @@ jobs:
               iw wireless-tools wpasupplicant rfkill firmware-mediatek rtl-sdr \
               rtl-433 gpsd gpsd-clients openssh-server ca-certificates curl gnupg sudo git \
               podman gpiod pinctrl python3 python3-pyqt6 bash-completion
+            apt-get install -y --no-upgrade python3-venv
             cd /opt/hackergadgets/aiov2_ctl
             python3 aiov2_ctl.py --install
             cat >/usr/local/share/aiov2_ctl/config.json <<'AIO2_EOF'
@@ -395,7 +396,7 @@ jobs:
 
           for package in nvme-cli smartmontools firmware-mediatek rtl-sdr openssh-server \
             hackergadgets-uconsole-aio-board meshtastic-mui sdrpp-brown tar1090 \
-            pygpsclient pinctrl gpiod python3-pyqt6 podman; do
+            pygpsclient pinctrl gpiod python3-pyqt6 python3-venv podman; do
             sudo chroot ./mnt/root dpkg-query -W -f='${db:Status-Abbrev}' "$package" | grep -qx 'ii '
           done
           FREE_KIB=$(df --output=avail -k ./mnt/root | tail -n 1 | xargs)

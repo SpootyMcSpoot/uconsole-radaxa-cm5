@@ -167,3 +167,13 @@
   no image or package command ran.
 - Minimal fix: rebuild the same pinned kernel in the current workflow and retain
   kernel artifacts for seven days so diagnostic image iterations remain usable.
+
+### PyGPSClient virtual environment
+
+- Gate: full kernel+Debian run `31463963934`, PyGPSClient post-installation.
+- Confirmed: fresh kernel passed; tar1090/readsb completed with the offline JSON
+  seed; `logname` resolved to the selected image identity.
+- Root cause: PyGPSClient creates a Python virtual environment but its package
+  does not depend on `python3-venv`; `ensurepip` was unavailable.
+- Minimal fix: install and assert Debian's `python3-venv` before invoking the
+  official HackerGadgets application installer.

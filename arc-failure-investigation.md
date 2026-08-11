@@ -198,3 +198,13 @@
 - One latent root-only-image issue was found: PyGPSClient's launcher points to
   `/home/root`, which is only a temporary compatibility link. Replace it with
   `/root/.pygpsclient/bin/pygpsclient` and assert the launcher is executable.
+
+### SHTF storage-file assembly
+
+- Gate: Debian image run `31468811243`, after every selected package configured.
+- Confirmed: HackerGadgets AIO, tar1090/readsb, PyGPSClient, Meshtastic MUI,
+  meshtasticd, and SDR++ all reached installed state.
+- Root cause: the workflow's `SHTF_EOF` terminator had two extra spaces, so Bash
+  consumed the remaining cleanup block as heredoc content and exited 1.
+- Minimal fix: align the terminator with the YAML-stripped shell column. Keep
+  `actionlint`, `shellcheck`, static package assertions, and artifact inspection.

@@ -381,7 +381,7 @@ jobs:
           SHTF_CACHE=/srv/shtf-box/cache
           SHTF_MODELS=/srv/shtf-box/models
           SHTF_MAPS=/srv/shtf-box/maps
-            SHTF_EOF
+          SHTF_EOF
             rm -f /usr/sbin/policy-rc.d
             rm -f /run/readsb/aircraft.json /boot/firmware/cmdline.txt \
               /boot/firmware/cmdline.txtn /usr/bin/logname /usr/bin/systemctl

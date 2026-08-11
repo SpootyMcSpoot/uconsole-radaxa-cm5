@@ -110,7 +110,7 @@ jobs:
           path: |
             kernel-packages/
             overlays/
-          retention-days: 1
+          retention-days: 7
 
   # ============================================================
   # JOB 2: Build Debian image

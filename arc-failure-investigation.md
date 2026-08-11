@@ -158,3 +158,12 @@
   and `/usr/bin/systemctl`, seed a valid temporary readsb JSON file, configure
   packages, then remove the seed and restore both original binaries. `/run` is
   never bound from the runner, so target scripts cannot contact host systemd.
+
+### Kernel artifact availability
+
+- Gate: Debian image run `31463553741`, before base-image download.
+- Confirmed infrastructure cause: kernel artifact `9051925615` expired at the
+  configured one-day retention boundary. GitHub API reports `expired: true`;
+  no image or package command ran.
+- Minimal fix: rebuild the same pinned kernel in the current workflow and retain
+  kernel artifacts for seven days so diagnostic image iterations remain usable.

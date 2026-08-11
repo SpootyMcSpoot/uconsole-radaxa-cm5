@@ -208,3 +208,16 @@
   consumed the remaining cleanup block as heredoc content and exited 1.
 - Minimal fix: align the terminator with the YAML-stripped shell column. Keep
   `actionlint`, `shellcheck`, static package assertions, and artifact inspection.
+
+### Silent post-package failure
+
+- Gate: Debian image run `31470416502`, after all upstream packages configured
+  and the corrected SHTF heredoc executed.
+- Package/maintainer hypotheses are ruled out. Remaining candidates are cleanup
+  restoration, free-space threshold, package-state loop, or static boot/files.
+- A clean Debian Bookworm container reproduces both dpkg diversions successfully.
+  However, target logs show real systemctl already handled the chroot safely, so
+  its diversion is unnecessary state and is removed.
+- Minimal diagnostic: retain only the required logname diversion; add an ERR
+  trap, named package assertions, cleanup markers, and the exact free-space value.
+  Do not rerun again without an exact failing command.

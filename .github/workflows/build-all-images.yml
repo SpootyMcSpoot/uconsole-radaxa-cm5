@@ -185,6 +185,7 @@ jobs:
 
       - name: Mount and modify image
         run: |
+          trap 'rc=$?; printf "::error::image assembly failed at line %s: %s (rc=%s)\n" "$LINENO" "$BASH_COMMAND" "$rc"; exit "$rc"' ERR
           test "$(git -C aiov2-source rev-parse HEAD)" = "${AIOV2_CTL_REF}"
           truncate -s "${DEBIAN_IMAGE_SIZE_GIB}G" debian.img
           export LOOP_DEVICE
@@ -305,11 +306,9 @@ jobs:
             sudo ln -s /root ./mnt/root/home/root
           fi
           sudo chroot ./mnt/root dpkg-divert --quiet --local --rename --add /usr/bin/logname
-          sudo chroot ./mnt/root dpkg-divert --quiet --local --rename --add /usr/bin/systemctl
           printf '#!/bin/sh\nprintf "%%s\\n" %q\n' "$TARGET_USER" | \
             sudo tee ./mnt/root/usr/bin/logname >/dev/null
-          printf '#!/bin/sh\nexit 0\n' | sudo tee ./mnt/root/usr/bin/systemctl >/dev/null
-          sudo chmod 0755 ./mnt/root/usr/bin/logname ./mnt/root/usr/bin/systemctl
+          sudo chmod 0755 ./mnt/root/usr/bin/logname
           sudo install -d -m 0755 ./mnt/root/run/readsb
           printf '{"now":0,"messages":0,"aircraft":[]}\n' | \
             sudo tee ./mnt/root/run/readsb/aircraft.json >/dev/null
@@ -384,12 +383,12 @@ jobs:
           SHTF_EOF
             rm -f /usr/sbin/policy-rc.d
             rm -f /run/readsb/aircraft.json /boot/firmware/cmdline.txt \
-              /boot/firmware/cmdline.txtn /usr/bin/logname /usr/bin/systemctl
+              /boot/firmware/cmdline.txtn /usr/bin/logname
             rmdir /boot/firmware 2>/dev/null || true
             dpkg-divert --quiet --rename --remove /usr/bin/logname
-            dpkg-divert --quiet --rename --remove /usr/bin/systemctl
             apt-get clean
           "
+          echo 'Image cleanup: chroot package cleanup complete'
           if [ "$TARGET_USER" = root ] && \
              [ "$(sudo readlink ./mnt/root/home/root 2>/dev/null || true)" = /root ]; then
             sudo rm ./mnt/root/home/root
@@ -404,13 +403,16 @@ jobs:
           for package in nvme-cli smartmontools firmware-mediatek rtl-sdr openssh-server \
             hackergadgets-uconsole-aio-board meshtastic-mui sdrpp-brown tar1090 \
             pygpsclient pinctrl gpiod python3-pyqt6 python3-venv podman; do
+            printf 'Package assertion: %s\n' "$package"
             sudo chroot ./mnt/root dpkg-query -W -f='${db:Status-Abbrev}' "$package" | grep -qx 'ii '
           done
           FREE_KIB=$(df --output=avail -k ./mnt/root | tail -n 1 | xargs)
+          printf 'Root filesystem free KiB: %s\n' "$FREE_KIB"
           test "$FREE_KIB" -ge 4194304
 
           # Static image contract: target helpers, signed repo, Wi-Fi firmware,
           # and boot files must exist before publishing.
+          echo 'Static image assertions: begin'
           sudo test -x ./mnt/root/usr/local/sbin/uconsole-bootstrap-nvme-root
           sudo test -x ./mnt/root/usr/local/sbin/uconsole-install-hackergadgets
           sudo test -x ./mnt/root/usr/local/sbin/uconsole-validate-hardware
@@ -430,7 +432,6 @@ jobs:
           sudo test -x ./mnt/root/usr/bin/logname
           sudo test -x ./mnt/root/usr/bin/systemctl
           sudo test ! -e ./mnt/root/usr/bin/logname.distrib
-          sudo test ! -e ./mnt/root/usr/bin/systemctl.distrib
           sudo test ! -e ./mnt/root/usr/sbin/policy-rc.d
           sudo test -d ./mnt/root/boot/extlinux
           for overlay in axp20x.dtbo cwu50_panel.dtbo displaystuff.dtbo aio2_radxa_rails.dtbo; do
@@ -438,6 +439,7 @@ jobs:
             sudo grep -Eq "^[[:space:]]*fdtoverlays .* /dtbo/$overlay([[:space:]]|$)" \
               ./mnt/root/boot/extlinux/extlinux.conf
           done
+          echo 'Static image assertions: complete'
 
           sudo sync
           sudo umount ./mnt/root/boot

@@ -252,10 +252,11 @@ jobs:
             https://raw.githubusercontent.com/ak-rex/akrex-arm-repo/main/debian/KEY.gpg
           echo '842f9fee1af93ec9fc5c45c5471f8d1ef7be605f35e458eca64d6dcc1699b206  ak-rex-key.asc' | sha256sum -c -
           gpg --batch --dearmor --output ak-rex.gpg ak-rex-key.asc
-          AK_REX_FINGERPRINT=$(
-            gpg --batch --show-keys --with-colons ak-rex.gpg | \
-              awk -F: '$1 == "fpr" { print $10; exit }'
-          )
+          gpg --batch --no-options --show-keys --with-colons ak-rex.gpg \
+            > ak-rex-key-info
+          AK_REX_FINGERPRINT=$(awk -F: '$1 == "fpr" { print $10; exit }' ak-rex-key-info)
+          rm -f ak-rex-key-info
+          printf 'AK-Rex signing-key fingerprint: %s\n' "$AK_REX_FINGERPRINT"
           test "$AK_REX_FINGERPRINT" = '5799BD7F376D1011C510B036B40C8F551C4AB897'
           sudo install -D -m 0644 ak-rex.gpg ./mnt/root/usr/share/keyrings/ak-rex.gpg
           echo 'deb [arch=arm64 signed-by=/usr/share/keyrings/ak-rex.gpg] https://raw.githubusercontent.com/ak-rex/akrex-arm-repo/main/debian stable main' | \

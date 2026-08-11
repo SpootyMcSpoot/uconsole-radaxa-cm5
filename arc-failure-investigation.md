@@ -96,3 +96,16 @@
 - Minimal experiment: bind `/proc` and `/dev` into the arm64 chroot, do not bind
   `/run`, provide a temporary `logname` shim returning the existing UID-1000
   image user, remove it before publication, and rerun once.
+
+### Follow-up run
+
+- Gate: Debian image run `31458347178`, before the chroot package phase.
+- Confirmed: root partition growth, `e2fsck`, `resize2fs`, mounts, and the pinned
+  key SHA-256 check passed. The step exited immediately after GPG created its
+  trust database, before logging a fingerprint or installing packages.
+- Key-content hypothesis: ruled out locally; the downloaded key has the pinned
+  SHA-256 and fingerprint `5799BD7F376D1011C510B036B40C8F551C4AB897`.
+- Leading gate hypothesis: the combined GPG-to-awk command substitution failed
+  or produced a runner-specific value, but the workflow did not expose which.
+- Minimal experiment: write `gpg --show-keys --with-colons` to a temporary file,
+  extract and log the fingerprint separately, then apply the same exact match.

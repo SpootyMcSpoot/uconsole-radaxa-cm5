@@ -81,3 +81,18 @@
   `/srv/shtf-box/{packages,data,cache,models,maps,backups}` and
   `/etc/shtf-box/storage.env`; the private ARM64 package can be loaded after
   NVMe-root validation.
+
+## Offline package configuration gate
+
+- Gate: Debian image run `31413119902`, `Mount and modify image`.
+- Contract hypotheses: package unavailable or dependency conflict. Evidence
+  against: APT downloaded and unpacked the complete package set.
+- Infrastructure hypothesis: maintainer scripts assume a booted/login system.
+  Confirmed: `tar1090` failed because `/proc/cpuinfo` was absent; `pygpsclient`
+  failed because `logname` returned no login account. `aiov2_ctl --add-apps`
+  then correctly propagated APT's exit 100.
+- Implementation/space hypotheses: no supporting error; overlays compiled,
+  kernel/base downloads passed, and failure occurred during configuration.
+- Minimal experiment: bind `/proc` and `/dev` into the arm64 chroot, do not bind
+  `/run`, provide a temporary `logname` shim returning the existing UID-1000
+  image user, remove it before publication, and rerun once.

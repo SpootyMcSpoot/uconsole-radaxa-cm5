@@ -263,6 +263,11 @@ jobs:
           sudo install -D -m 0644 ak-rex.gpg ./mnt/root/usr/share/keyrings/ak-rex.gpg
           echo 'deb [arch=arm64 signed-by=/usr/share/keyrings/ak-rex.gpg] https://raw.githubusercontent.com/ak-rex/akrex-arm-repo/main/debian stable main' | \
             sudo tee ./mnt/root/etc/apt/sources.list.d/ak-rex.list >/dev/null
+          { \
+            echo 'deb http://deb.debian.org/debian bookworm non-free-firmware'; \
+            echo 'deb http://deb.debian.org/debian bookworm-updates non-free-firmware'; \
+            echo 'deb http://security.debian.org/debian-security bookworm-security non-free-firmware'; \
+          } | sudo tee ./mnt/root/etc/apt/sources.list.d/uconsole-firmware.list >/dev/null
           sudo grep -Rqs 'non-free-firmware' \
             ./mnt/root/etc/apt/sources.list ./mnt/root/etc/apt/sources.list.d
 

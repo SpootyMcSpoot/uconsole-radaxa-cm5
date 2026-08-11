@@ -117,3 +117,13 @@
   it exited 2 with `Fatal: /home/runner/.gnupg: directory does not exist`.
 - Minimal fix: create a mode-0700 GPG home under `$RUNNER_TEMP` and pass it with
   `--homedir`. It is runner-only, never copied into the target image.
+
+### Repository-component gate result
+
+- Gate: Debian image run `31459036162`, immediately after key validation.
+- Confirmed: isolated GPG home worked and the exact expected fingerprint was
+  logged. The following `non-free-firmware` source assertion exited 1.
+- Root cause: Radxa rsdk-b3's Bookworm source configuration does not include the
+  Debian 12 `non-free-firmware` component required by `firmware-mediatek`.
+- Minimal fix: add component-only Bookworm, Bookworm updates, and security source
+  lines, avoiding duplicate `main` entries, then keep the assertion.

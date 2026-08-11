@@ -127,3 +127,12 @@
   Debian 12 `non-free-firmware` component required by `firmware-mediatek`.
 - Minimal fix: add component-only Bookworm, Bookworm updates, and security source
   lines, avoiding duplicate `main` entries, then keep the assertion.
+
+### Source assertion follow-up
+
+- Gate: Debian image run `31459394194`, within 70 ms after the valid fingerprint.
+- The broad recursive source assertion still exited 1 without identifying which
+  preceding quiet command completed.
+- Minimal diagnostic: emit stage markers, assert the exact firmware source file
+  written by this workflow, and search that file directly. This distinguishes
+  key install, AK-Rex source write, firmware source write, and assertion failures.

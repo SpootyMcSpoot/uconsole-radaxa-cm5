@@ -295,10 +295,13 @@ jobs:
           sudo chmod 0755 ./mnt/root/usr/sbin/policy-rc.d
 
           # PyGPSClient's maintainer script assumes an interactive login and
-          # calls logname. Supply the image's real UID-1000 account only while
-          # packages configure, then remove the shim before publishing.
+          # calls logname. Supply the image's UID-1000 account when one exists;
+          # rsdk-b3 is root-only before first boot, so otherwise use root. This
+          # changes no login credentials and the shim is removed before publish.
           TARGET_USER=$(awk -F: '$3 == 1000 { print $1; exit }' ./mnt/root/etc/passwd)
+          TARGET_USER=${TARGET_USER:-root}
           [[ $TARGET_USER =~ ^[a-z_][a-z0-9_-]*$ ]]
+          printf 'Offline package identity: %s\n' "$TARGET_USER"
           printf '#!/bin/sh\nprintf "%%s\\n" %q\n' "$TARGET_USER" | \
             sudo tee ./mnt/root/usr/local/sbin/logname >/dev/null
           sudo chmod 0755 ./mnt/root/usr/local/sbin/logname

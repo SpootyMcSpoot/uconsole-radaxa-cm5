@@ -136,3 +136,12 @@
 - Minimal diagnostic: emit stage markers, assert the exact firmware source file
   written by this workflow, and search that file directly. This distinguishes
   key install, AK-Rex source write, firmware source write, and assertion failures.
+
+### Post-repository identity gate
+
+- Gate: Debian image run `31459931670`, after `Repository gate: complete`.
+- Repository key/source hypotheses are ruled out. The base root listing shows an
+  empty `/home`; the next strict operation rejects an absent UID-1000 user.
+- Minimal fix: use the image's UID-1000 identity when present, otherwise `root`
+  solely for the temporary `logname` compatibility shim. Log the choice and
+  remove the shim before publishing; do not create or change credentials.

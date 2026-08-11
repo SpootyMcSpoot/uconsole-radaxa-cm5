@@ -109,3 +109,11 @@
   or produced a runner-specific value, but the workflow did not expose which.
 - Minimal experiment: write `gpg --show-keys --with-colons` to a temporary file,
   extract and log the fingerprint separately, then apply the same exact match.
+
+### Fingerprint experiment result
+
+- Gate: Debian image run `31458828747`, same pre-chroot key-validation phase.
+- Confirmed cause: `gpg --no-options` did not create the default runner GPG home;
+  it exited 2 with `Fatal: /home/runner/.gnupg: directory does not exist`.
+- Minimal fix: create a mode-0700 GPG home under `$RUNNER_TEMP` and pass it with
+  `--homedir`. It is runner-only, never copied into the target image.

@@ -313,6 +313,8 @@ jobs:
           sudo install -d -m 0755 ./mnt/root/run/readsb
           printf '{"now":0,"messages":0,"aircraft":[]}\n' | \
             sudo tee ./mnt/root/run/readsb/aircraft.json >/dev/null
+          sudo install -d -m 0755 ./mnt/root/boot/firmware
+          printf '\n' | sudo tee ./mnt/root/boot/firmware/cmdline.txt >/dev/null
 
           # Radxa's u-boot-menu prepends the mounted /boot path when /boot is a
           # separate filesystem, so its overlay directory must be boot-relative.
@@ -378,7 +380,9 @@ jobs:
           SHTF_MAPS=/srv/shtf-box/maps
             SHTF_EOF
             rm -f /usr/sbin/policy-rc.d
-            rm -f /run/readsb/aircraft.json /usr/bin/logname /usr/bin/systemctl
+            rm -f /run/readsb/aircraft.json /boot/firmware/cmdline.txt \
+              /boot/firmware/cmdline.txtn /usr/bin/logname /usr/bin/systemctl
+            rmdir /boot/firmware 2>/dev/null || true
             dpkg-divert --quiet --rename --remove /usr/bin/logname
             dpkg-divert --quiet --rename --remove /usr/bin/systemctl
             apt-get clean
@@ -417,6 +421,7 @@ jobs:
           sudo test -d ./mnt/root/srv/shtf-box/packages
           sudo test -s ./mnt/root/etc/shtf-box/storage.env
           sudo test ! -e ./mnt/root/run/readsb/aircraft.json
+          sudo test ! -e ./mnt/root/boot/firmware/cmdline.txt
           sudo test ! -L ./mnt/root/home/root
           sudo test -x ./mnt/root/usr/bin/logname
           sudo test -x ./mnt/root/usr/bin/systemctl

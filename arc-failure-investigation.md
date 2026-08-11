@@ -177,3 +177,13 @@
   does not depend on `python3-venv`; `ensurepip` was unavailable.
 - Minimal fix: install and assert Debian's `python3-venv` before invoking the
   official HackerGadgets application installer.
+
+### PyGPSClient Raspberry boot-path assumption
+
+- Gate: Debian image run `31467200704`, final PyGPSClient post-install step.
+- Confirmed: virtual environment and all Python dependencies installed. The
+  package then failed only because it unconditionally edits Raspberry Pi path
+  `/boot/firmware/cmdline.txt` to remove `console=serial0,115200`.
+- Radxa uses `/boot/extlinux/extlinux.conf`; that Raspberry token/path is absent.
+- Minimal fix: provide an empty temporary Pi compatibility file during package
+  configuration, remove it afterward, and retain assertions on Radxa extlinux.

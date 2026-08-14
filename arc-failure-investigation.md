@@ -311,3 +311,20 @@
   running kernel config says `# CONFIG_BACKLIGHT_OCP8178 is not set`. This is
   the exact missing driver. Minimal fix: build it as a module, assert the config,
   retain rootfs boot layout, rebuild image, then verify live panel/DRM state.
+
+### Corrected-image CI assertion failure
+
+- Run `31763602529` built the corrected kernel successfully; independent
+  artifact inspection found `CONFIG_BACKLIGHT_OCP8178=m` and
+  `drivers/video/backlight/ocp8178_bl.ko`.
+- Debian assembly reached every package assertion, then rejected the first
+  overlay (`axp20x.dtbo`). The image-content hypothesis was weakened because
+  the generated line begins with exactly one separator:
+  `fdtoverlays /boot/dtbo/axp20x.dtbo ...`.
+- Root cause: the assertion regex contained both the separator before `.*` and
+  another literal separator after it, so the first token required two spaces.
+  The same regex passed every later overlay. A minimal replay against the
+  captured target extlinux file reproduced that exact first-token-only failure.
+- Correction: parse the `fdtoverlays` record as whitespace-delimited fields
+  with `awk` and require each expected path as an exact token. Reuse the
+  successful kernel artifact for the image-only rerun.

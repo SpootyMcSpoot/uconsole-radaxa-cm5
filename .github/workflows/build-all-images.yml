@@ -466,7 +466,8 @@ jobs:
             ./mnt/root/boot/extlinux/extlinux.conf
           for overlay in axp20x.dtbo cwu50_panel.dtbo displaystuff.dtbo aio2_radxa_rails.dtbo; do
             sudo test -s "./mnt/root/boot/dtbo/$overlay"
-            sudo grep -Eq "^[[:space:]]*fdtoverlays .* /boot/dtbo/$overlay([[:space:]]|$)" \
+            sudo awk -v path="/boot/dtbo/$overlay" \
+              '$1 == "fdtoverlays" { for (i = 2; i <= NF; i++) if ($i == path) found = 1 } END { exit !found }' \
               ./mnt/root/boot/extlinux/extlinux.conf
           done
           echo 'Static image assertions: complete'

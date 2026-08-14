@@ -430,7 +430,7 @@ jobs:
           sudo ln -sfn "$PYGPSCLIENT_VENV" ./mnt/root/usr/local/bin/pygpsclient
 
           for package in nvme-cli smartmontools firmware-mediatek rtl-sdr openssh-server \
-            hackergadgets-uconsole-aio-board meshtastic-mui sdrpp-brown tar1090 \
+            hackergadgets-uconsole-aio-board meshtasticd meshtastic-mui sdrpp-brown tar1090 \
             pygpsclient pinctrl gpiod python3-pyqt6 python3-venv podman; do
             printf 'Package assertion: %s\n' "$package"
             sudo chroot ./mnt/root dpkg-query -W -f='${db:Status-Abbrev}' "$package" | grep -qx 'ii '

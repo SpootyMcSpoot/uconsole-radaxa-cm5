@@ -356,7 +356,10 @@ jobs:
               gdisk parted e2fsprogs rsync nvme-cli smartmontools pciutils usbutils i2c-tools \
               iw wireless-tools wpasupplicant rfkill firmware-mediatek rtl-sdr \
               rtl-433 gpsd gpsd-clients openssh-server ca-certificates curl gnupg sudo git \
-              podman gpiod pinctrl python3 python3-pyqt6 bash-completion
+              podman gpiod pinctrl python3 python3-pyqt6 bash-completion \
+              xserver-xorg x11-apps x11-xserver-utils dbus-x11 lightdm \
+              lightdm-gtk-greeter xfce4 xfce4-goodies network-manager-gnome policykit-1
+            apt-get install -y --no-upgrade accountsservice
             apt-get install -y --no-upgrade python3-venv
             cd /opt/hackergadgets/aiov2_ctl
             python3 aiov2_ctl.py --install
@@ -385,6 +388,8 @@ jobs:
             sed -i '/^[[:space:]]*smartd_opts=/d' /etc/default/smartmontools
             echo 'smartd_opts="--quit=never"' >>/etc/default/smartmontools
             systemctl enable ssh
+            systemctl enable lightdm
+            systemctl set-default graphical.target
             systemctl enable aiov2-rails-boot.service
             systemctl disable meshtasticd.service 2>/dev/null || true
             install -d -m 0755 \
@@ -431,7 +436,8 @@ jobs:
 
           for package in nvme-cli smartmontools firmware-mediatek rtl-sdr openssh-server \
             hackergadgets-uconsole-aio-board meshtasticd meshtastic-mui sdrpp-brown tar1090 \
-            pygpsclient pinctrl gpiod python3-pyqt6 python3-venv podman; do
+            pygpsclient pinctrl gpiod python3-pyqt6 python3-venv podman xserver-xorg \
+            lightdm lightdm-gtk-greeter xfce4 xfce4-session dbus-x11 accountsservice; do
             printf 'Package assertion: %s\n' "$package"
             sudo chroot ./mnt/root dpkg-query -W -f='${db:Status-Abbrev}' "$package" | grep -qx 'ii '
           done
@@ -465,6 +471,9 @@ jobs:
           test "$(sudo readlink ./mnt/root/srv/shtf-box)" = /content
           sudo test -s ./mnt/root/etc/shtf-box/storage.env
           sudo grep -qx 'SHTF_ROOT=/content' ./mnt/root/etc/shtf-box/storage.env
+          sudo test -s ./mnt/root/usr/share/xsessions/xfce.desktop
+          sudo test -L ./mnt/root/etc/systemd/system/display-manager.service
+          sudo chroot ./mnt/root systemctl get-default | grep -qx graphical.target
           sudo test ! -e ./mnt/root/run/readsb/aircraft.json
           sudo test ! -e ./mnt/root/boot/firmware/cmdline.txt
           if [ "$TARGET_USER" = root ]; then

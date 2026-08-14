@@ -1,15 +1,27 @@
 #!/bin/bash
 set -Eeuo pipefail
 
+allow_emmc=false
+if [[ ${1:-} == --allow-emmc ]]; then
+    allow_emmc=true
+    shift
+fi
+[[ $# -eq 0 ]] || { echo "Usage: sudo uconsole-install-hackergadgets [--allow-emmc]" >&2; exit 2; }
+
 [[ $EUID -eq 0 ]] || { echo "Must run as root" >&2; exit 1; }
 [[ $(uname -m) == aarch64 ]] || { echo "Refusing: target is not aarch64" >&2; exit 1; }
 model=$(tr -d '\0' </proc/device-tree/model 2>/dev/null || true)
 grep -Eqi 'radxa.*cm5|rk3588s' <<<"$model" || { echo "Refusing: not Radxa CM5 ($model)" >&2; exit 1; }
 root_source=$(findmnt -n -o SOURCE /)
-[[ $root_source == /dev/nvme* ]] || {
+[[ $root_source == /dev/nvme* || $allow_emmc == true ]] || {
     echo "Refusing large package install before NVMe is active as root (current: $root_source)" >&2
+    echo "Use --allow-emmc only when root has sufficient free space." >&2
     exit 1
 }
+if [[ $allow_emmc == true ]]; then
+    free_kib=$(df --output=avail -k / | tail -n 1 | xargs)
+    ((free_kib >= 4194304)) || { echo "Refusing: less than 4 GiB free on root" >&2; exit 1; }
+fi
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
@@ -17,15 +29,25 @@ apt-get install -y --install-recommends \
     hackergadgets-uconsole-aio-board meshtastic-mui sdrpp-brown tar1090 pygpsclient \
     nvme-cli smartmontools pciutils usbutils i2c-tools iw wireless-tools \
     firmware-mediatek rfkill rtl-sdr rtl-433 gpsd gpsd-clients \
-    podman git rsync curl ca-certificates
+    podman git rsync curl ca-certificates xserver-xorg x11-apps \
+    x11-xserver-utils dbus-x11 lightdm lightdm-gtk-greeter xfce4 \
+    xfce4-goodies network-manager-gnome policykit-1 accountsservice
 
-install -d -m 0755 /srv/shtf-box/{packages,data,cache,models,maps,backups} /etc/shtf-box
+install -d -m 0755 \
+    /content/packages /content/zim /content/audio /content/comics \
+    /content/data /content/cache /content/models /content/maps /content/backups \
+    /srv /etc/shtf-box
+if [[ -e /srv/shtf-box && ! -L /srv/shtf-box ]]; then
+    find /srv/shtf-box -mindepth 1 -maxdepth 1 -exec cp -a -n --target-directory=/content {} +
+    mv /srv/shtf-box "/srv/shtf-box.pre-content-link-$(date -u +%Y%m%dT%H%M%SZ)"
+fi
+ln -sfn /content /srv/shtf-box
 cat >/etc/shtf-box/storage.env <<'EOF'
-SHTF_ROOT=/srv/shtf-box
-SHTF_DATA=/srv/shtf-box/data
-SHTF_CACHE=/srv/shtf-box/cache
-SHTF_MODELS=/srv/shtf-box/models
-SHTF_MAPS=/srv/shtf-box/maps
+SHTF_ROOT=/content
+SHTF_DATA=/content/data
+SHTF_CACHE=/content/cache
+SHTF_MODELS=/content/models
+SHTF_MAPS=/content/maps
 EOF
 
 depmod -a
@@ -33,6 +55,8 @@ modprobe nvme || true
 modprobe mt7921u || true
 modprobe btusb || true
 systemctl enable --now gpsd.socket 2>/dev/null || true
+systemctl enable lightdm
+systemctl set-default graphical.target
+systemctl restart lightdm
 date -u +%FT%TZ >/etc/shtf-box/hackergadgets-installed-at
-echo "HackerGadgets packages installed on NVMe root; reboot required."
-
+echo "HackerGadgets and XFCE packages installed on $root_source; reboot required."

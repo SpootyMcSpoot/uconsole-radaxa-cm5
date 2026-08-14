@@ -415,3 +415,32 @@
 - RTC validation also remains hardware-blocked: DT instantiates PCF85063 at
   I2C7 address `0x51`, but the driver reports `RTC chip is not present` and no
   `/dev/rtc*` node exists.
+
+### Backlight and DSI scanout work but screen still appears blank
+
+- Current boot has zero DSI command-interface errors, DSI-1 connected at
+  720x1280, and non-zero framebuffer content. Panel driver regression is ruled
+  out for this symptom.
+- `graphical.target` was active, but no display manager, greeter, XFCE session,
+  or Xorg metapackage existed. `display-manager.service` was absent and no
+  process owned DRM. Missing graphical userspace is confirmed root cause.
+- Installed Xorg, LightDM GTK greeter, XFCE, NetworkManager UI, and PolicyKit.
+  Starting LightDM switched to tty7, Xorg acquired DSI-1 at 720x1280, and an
+  XWD readback captured a rendered 720x1280 greeter with 6,222 colors.
+- Image build now installs and asserts this desktop contract. Live validator
+  requires installed desktop packages, enabled/active LightDM, graphical
+  default target, and an authoritative Xrandr DSI scanout readback.
+
+### Permanent kernel install blocked by temporary cross-built headers
+
+- Installing CI kernel package copied correct module and boot files but left
+  package half-configured. Exact failing hook was `dkms`; `radxa-overlays`
+  attempted rebuilding against temporary live-debug headers and returned 126.
+- Those cross-built headers contained build-host helper binaries unsuitable for
+  ARM execution. They are not part of published image and are not needed at
+  runtime. Removing only temporary headers made DKMS correctly skip, after
+  which package configuration completed with no audit findings.
+- Rebooted production kernel uses module SHA-256
+  `533f42f0d9ae2e268bf951d323a60f703a4ea2bb05abf3856f3133fbbe128fde`.
+  Current boot has zero DSI busy/errors, active LightDM/Xorg DSI scanout,
+  healthy SHTF/AIO2 services, and no failed units.

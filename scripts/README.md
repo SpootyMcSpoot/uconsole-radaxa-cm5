@@ -31,6 +31,43 @@ sudo apt-get install wget xz-utils kmod cpio rsync dosfstools parted \
 
 ## Usage
 
+### End-to-end repeatable deployment
+
+Build/download raw Debian image, then flash one CM5 connected in Maskrom mode:
+
+```bash
+sudo scripts/flash-uconsole-maskrom.sh \
+  --image radxa-cm5-uconsole_debian_bookworm.img \
+  --loader rk3588_spl_loader.bin \
+  --sha256 <published-raw-image-sha256>
+```
+
+Script requires exact RK3588 Maskrom USB identity, flashes eMMC, performs full
+image-sized readback verification, and reboots. Turn Maskrom switch off for
+normal boot.
+
+After network boot, validate or idempotently reprovision target over SSH:
+
+```bash
+SSHPASS='<ssh-password>' SUDO_PASSWORD='<sudo-password>' \
+  scripts/provision-uconsole-over-ssh.sh --host 192.168.0.146
+
+# Only when a verified NVMe block device is present; destructive to that device:
+SSHPASS='<ssh-password>' SUDO_PASSWORD='<sudo-password>' \
+  scripts/provision-uconsole-over-ssh.sh --host 192.168.0.146 \
+  --migrate-nvme /dev/nvme0n1
+```
+
+Remote automation rejects loopback and every address assigned to operator host,
+then requires exact `Radxa CM5 RPI CM4 IO` device-tree identity. Target scripts
+never execute locally. Built Debian image already includes HackerGadgets stack,
+XFCE/LightDM, AIO2 boot rails, SHTF storage staging, NVMe bootstrap helper, and
+hardware validator.
+
+For live kernel updates, install only `linux-image-*.deb`. CI-generated headers
+contain cross-build helper binaries and are intended for build inspection, not
+on-device DKMS compilation.
+
 ### 1. Build Kernel
 
 ```bash

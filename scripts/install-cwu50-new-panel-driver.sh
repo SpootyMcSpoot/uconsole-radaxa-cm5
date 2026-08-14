@@ -26,9 +26,20 @@ sed -i \
   -e '/^static int cwu50_enable/,/^}/ {/^[[:space:]]*struct mipi_dsi_device \*dsi =/d; /^[[:space:]]*int ret;$/d;}' \
   "${TEMP_DRIVER}"
 
+# GPIO1_B4 already identifies the panel revision before attach on the CM5.  The
+# Raspberry Pi driver's redundant DCS register read wedges the RK3588 DSI2 CRI
+# receive path; every subsequent initialization write then times out.  Keep the
+# GPIO result authoritative on this host and avoid that unsupported read.
+sed -i \
+  -e '/^static int cwu50_prepare/,/^}/ {/^[[:space:]]*u8 buf\[4\];$/d; s/^[[:space:]]*dcs_write_seq(0xE0,0x00);$/\t\/\* GPIO panel ID is authoritative on RK3588; avoid the CRI RX read. \*\//; /mipi_dsi_dcs_read(dsi, 0x04, buf, 3);/d; /if(buf\[0\] == 0x39) ctx->is_new_panel = 1;/d;}' \
+  "${TEMP_DRIVER}"
+
 grep -q 'cwu50_init_sequence2' "${TEMP_DRIVER}"
 grep -q 'is_new_panel' "${TEMP_DRIVER}"
-grep -q 'mipi_dsi_dcs_read(dsi, 0x04' "${TEMP_DRIVER}"
+grep -q 'GPIO panel ID is authoritative on RK3588' "${TEMP_DRIVER}"
+if sed -n '/^static int cwu50_prepare/,/^}/p' "${TEMP_DRIVER}" | grep -Eq 'u8 buf\[4\]|mipi_dsi_dcs_read'; then
+  exit 1
+fi
 if sed -n '/^static int cwu50_init_sequence2/,/^}/p' "${TEMP_DRIVER}" | grep -q 'int err;'; then
   exit 1
 fi

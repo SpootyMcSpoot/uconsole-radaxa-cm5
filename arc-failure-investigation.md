@@ -336,3 +336,57 @@
 - Minimal correction: set `U_BOOT_FDT_OVERLAYS_DIR="/boot/dtbo"` without a
   trailing slash. Keep the exact-token assertion so doubled or otherwise
   malformed paths cannot pass future builds.
+
+### Backlight active but CWU50 panel remains blank
+
+- Live target identity is `Radxa CM5 RPI CM4 IO`; kernel, Debian userspace,
+  `rockchipdrmfb`, tty1 login text, DSI connector, 720x1280 mode, CWU50 panel,
+  and OCP8178 backlight are all present. This rules out flash corruption,
+  failed boot, missing framebuffer, missing console, and missing backlight.
+- Exact failure is a burst of `cri_fifos_wait_avail: command interface is busy`
+  errors followed by `failed to exit sleep mode (-110)`. The pinned Radxa DSI2
+  host uses `MIPI_DSI_MSG_USE_LPM` to enable LPDT command transmission, but the
+  transplanted Raspberry Pi CWU50 driver does not advertise
+  `MIPI_DSI_MODE_LPM`; therefore all DCS initialization commands use the HS
+  command path. This is the leading implementation-contract hypothesis.
+- Smallest discriminator: add only `MIPI_DSI_MODE_LPM` to the panel's existing
+  video flags, deploy that kernel, reboot once, and require the busy/timeout
+  errors to disappear plus visible tty output.
+- Competing hypotheses retained: the new-panel path intentionally skips the
+  old-panel reset pulse, and the DT supplies currently resolve to dummy
+  regulators. If LPDT does not clear the timeout, test reset sequencing next;
+  do not change both variables in one build.
+- Upstream research: `ResistanceIsUseless/uconsole-radaxa-cm5` remains at
+  `1c3c41d` with no newer panel integration. AK-Rex published a newer CWU50
+  source commit `d483ba90b20d` on 2026-07-23, but its CM4/CM5 prepare path and
+  DSI flags remain unchanged, so wholesale replacement would add unrelated
+  CM3 changes without addressing this failure.
+- LPDT discriminator failed: an exact-vermagic live module adding only
+  `MIPI_DSI_MODE_LPM` booted successfully but reproduced 193 command-interface
+  timeouts and `failed to exit sleep mode (-110)`. Restore the original flags;
+  transport mode is ruled out.
+- Reset sequencing is now leading. The active overlay defines GPIO1_B4 as
+  active-high `reset-gpio`; the transplanted driver samples it high, labels the
+  panel new, then uniquely leaves the line as an input and skips the reset
+  pulse. The original Radxa driver always drives and cycles this line before
+  initialization. Smallest next discriminator: retain the detected new-panel
+  init sequence, but switch the shared ID/reset GPIO to output and pulse it for
+  both revisions. This changes reset handling without changing DSI flags or
+  the selected panel command table.
+- Reset discriminator also failed: an exact-vermagic module switched GPIO1_B4
+  to output and pulsed it before retaining the new-panel command table. It
+  logged the intended reset but still produced exactly 193 CRI timeouts and
+  the same final `-110`. Restore original reset behavior.
+- The failure boundary is now the redundant panel-ID DCS read. Before it, TE,
+  SLPOUT, and page-select writes complete without a timeout. Immediately after
+  `mipi_dsi_dcs_read(..., 0x04, ...)`, every command in the selected init table
+  times out. The CM5 already sampled GPIO1_B4 high and selected the new-panel
+  table, so this read supplies no target-specific information. Smallest next
+  discriminator: keep original flags, reset behavior, and new-panel table;
+  remove only the register read and its unused buffer.
+- DCS-read discriminator passed. Exact-vermagic module SHA-256
+  `a3ccc95c9e7a985f0961d1ba27a5df26390359da037e20d60804fab77c3d1c14`
+  booted as boot ID `7d607449-2fe1-4ae5-9638-5f2a522cbd25`; CRI busy count
+  fell from 193 to 0, sleep/display command failures disappeared, DSI remained
+  connected at 720x1280, and `rockchipdrmfb` registered normally. Root cause is
+  confirmed: the redundant `0x04` read wedges this RK3588 DSI2 receive path.

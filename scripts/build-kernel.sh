@@ -97,6 +97,7 @@ for symbol in BLK_DEV_NVME MT7921U BT_HCIBTUSB DRM_PANEL_CWU50 BACKLIGHT_OCP8178
 done
 grep -q 'cwu50_init_sequence2' drivers/gpu/drm/panel/panel-cwu50.c
 grep -q 'is_new_panel' drivers/gpu/drm/panel/panel-cwu50.c
+grep -q 'GPIO panel ID is authoritative on RK3588' drivers/gpu/drm/panel/panel-cwu50.c
 
 log_info "Building kernel (this will take 30-45 minutes)..."
 make -j"$(nproc)" Image modules dtbs

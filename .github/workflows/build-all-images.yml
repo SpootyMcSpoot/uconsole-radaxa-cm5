@@ -335,7 +335,7 @@ jobs:
             ./mnt/root/etc/default/u-boot
           cat <<'EOF' | sudo tee -a ./mnt/root/etc/default/u-boot >/dev/null
           U_BOOT_FDT_OVERLAYS="axp20x.dtbo cwu50_panel.dtbo displaystuff.dtbo aio2_radxa_rails.dtbo"
-          U_BOOT_FDT_OVERLAYS_DIR="/boot/dtbo/"
+          U_BOOT_FDT_OVERLAYS_DIR="/boot/dtbo"
           EOF
 
           # Install kernel

@@ -328,3 +328,11 @@
 - Correction: parse the `fdtoverlays` record as whitespace-delimited fields
   with `awk` and require each expected path as an exact token. Reuse the
   successful kernel artifact for the image-only rerun.
+- Run `31767637551` then failed that exact-token check after every package gate.
+  Inspection of pinned `/usr/sbin/u-boot-update` showed it constructs each token
+  as `${U_BOOT_FDT_OVERLAYS_DIR}/${_DTBO}`. The configured directory ended in
+  `/`, so current CI generated `/boot/dtbo//axp20x.dtbo`; the earlier captured
+  file had been corrected manually and therefore could not expose this.
+- Minimal correction: set `U_BOOT_FDT_OVERLAYS_DIR="/boot/dtbo"` without a
+  trailing slash. Keep the exact-token assertion so doubled or otherwise
+  malformed paths cannot pass future builds.

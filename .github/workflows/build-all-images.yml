@@ -388,15 +388,17 @@ jobs:
             systemctl enable aiov2-rails-boot.service
             systemctl disable meshtasticd.service 2>/dev/null || true
             install -d -m 0755 \
-              /srv/shtf-box/packages /srv/shtf-box/data /srv/shtf-box/cache \
-              /srv/shtf-box/models /srv/shtf-box/maps /srv/shtf-box/backups \
-              /etc/shtf-box
+              /content/packages /content/zim /content/audio /content/comics \
+              /content/data /content/cache /content/models /content/maps \
+              /content/backups
+            install -d -m 0755 /srv /etc/shtf-box
+            ln -sfn /content /srv/shtf-box
             cat >/etc/shtf-box/storage.env <<'SHTF_EOF'
-          SHTF_ROOT=/srv/shtf-box
-          SHTF_DATA=/srv/shtf-box/data
-          SHTF_CACHE=/srv/shtf-box/cache
-          SHTF_MODELS=/srv/shtf-box/models
-          SHTF_MAPS=/srv/shtf-box/maps
+          SHTF_ROOT=/content
+          SHTF_DATA=/content/data
+          SHTF_CACHE=/content/cache
+          SHTF_MODELS=/content/models
+          SHTF_MAPS=/content/maps
           SHTF_EOF
             rm -f /usr/sbin/policy-rc.d
             rm -f /run/readsb/aircraft.json /boot/firmware/cmdline.txt \
@@ -458,8 +460,11 @@ jobs:
           sudo grep -qx 'smartd_opts="--quit=never"' ./mnt/root/etc/default/smartmontools
           sudo test -s ./mnt/root/usr/share/keyrings/ak-rex.gpg
           sudo test -d ./mnt/root/lib/firmware/mediatek
-          sudo test -d ./mnt/root/srv/shtf-box/packages
+          sudo test -d ./mnt/root/content/packages
+          sudo test -L ./mnt/root/srv/shtf-box
+          test "$(sudo readlink ./mnt/root/srv/shtf-box)" = /content
           sudo test -s ./mnt/root/etc/shtf-box/storage.env
+          sudo grep -qx 'SHTF_ROOT=/content' ./mnt/root/etc/shtf-box/storage.env
           sudo test ! -e ./mnt/root/run/readsb/aircraft.json
           sudo test ! -e ./mnt/root/boot/firmware/cmdline.txt
           if [ "$TARGET_USER" = root ]; then

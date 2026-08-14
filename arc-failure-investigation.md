@@ -390,3 +390,28 @@
   fell from 193 to 0, sleep/display command failures disappeared, DSI remained
   connected at 720x1280, and `rockchipdrmfb` registered normally. Root cause is
   confirmed: the redundant `0x04` read wedges this RK3588 DSI2 receive path.
+
+### AIO2, SHTF, and NVMe live validation
+
+- AIO2 package install initially left every boot rail off because
+  `aiov2_ctl --add-apps` overwrote the earlier image-build configuration.
+  Reapplying configuration after `--add-apps` made GPIO7 (SDR) and GPIO23
+  (USB) persist high across reboot. MT7921 (`0e8d:7961`) and RTL2838
+  (`0bda:2838`) then enumerated, with a wireless interface present.
+- Disabled incompatible `backlight.service` (Raspberry Pi GPIO9) and optional
+  `nvmf-autoconnect.service`; configured smartd with `--quit=never` so an image
+  without attached storage remains healthy. After reboot, no systemd unit was
+  failed and OCP8178 brightness remained active.
+- Installed `shtf-box` `0.0.0~f4323952-1` arm64, enabled its hardened service,
+  and received HTTP 200 plus `{"status":"ok"}` from `/api/v1/health` after
+  reboot. Aligned staging with the package's real `/content` contract and kept
+  `/srv/shtf-box` as a compatibility symlink.
+- NVMe remains absent from PCI and block enumeration. The CM5 regulator
+  `vcc3v3_pcie2x1l0` is enabled, but both cold boot and a late manual platform
+  reprobe remain at LTSSM `0x3` (receiver detect) and end in link failure. This
+  rules out OS timing and root-migration code; no endpoint is electrically
+  detected. Do not run the destructive bootstrap helper until `/dev/nvme0n1`
+  exists and reports the expected 2 TB capacity.
+- RTC validation also remains hardware-blocked: DT instantiates PCF85063 at
+  I2C7 address `0x51`, but the driver reports `RTC chip is not present` and no
+  `/dev/rtc*` node exists.

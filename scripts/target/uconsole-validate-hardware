@@ -13,7 +13,16 @@ is_radxa() { tr -d '\0' </proc/device-tree/model | grep -Eqi 'radxa.*cm5|rk3588s
 root_on_nvme() { findmnt -n -o SOURCE / | grep -q '^/dev/nvme'; }
 has_nvme() { nvme list 2>/dev/null | grep -q /dev/nvme; }
 package_ok() { dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q 'install ok installed'; }
-storage_ok() { [[ -d /srv/shtf-box/packages && -f /etc/shtf-box/storage.env ]]; }
+storage_ok() {
+    [[ -d /content/packages && -f /etc/shtf-box/storage.env ]] &&
+        grep -qx 'SHTF_ROOT=/content' /etc/shtf-box/storage.env
+}
+shtf_service_ok() {
+    package_ok shtf-box &&
+        systemctl is-enabled --quiet shtf-box.service &&
+        systemctl is-active --quiet shtf-box.service
+}
+shtf_health_ok() { curl -fsS --max-time 5 http://127.0.0.1:8080/api/v1/health | grep -q '"status":"ok"'; }
 systemd_ok() { [[ $(systemctl --failed --no-legend 2>/dev/null | wc -l) -eq 0 ]]; }
 boot_points_to_root() {
     local uuid
@@ -33,6 +42,7 @@ rail_high() { pinctrl get "$1" 2>/dev/null | grep -qw hi; }
 rtc_ok() { hwclock --show >/dev/null 2>&1; }
 wifi_usb_ok() { lsusb | grep -Eqi 'MediaTek|MT7921|0e8d:'; }
 wifi_interface_ok() { iw dev 2>/dev/null | grep -q 'Interface'; }
+mt7921u_driver_ok() { modinfo mt7921u >/dev/null 2>&1; }
 aio2_service_ok() { systemctl is-enabled --quiet aiov2-rails-boot.service; }
 
 check "aarch64" test "$(uname -m)" = aarch64
@@ -42,7 +52,7 @@ check "NVMe device" has_nvme
 check "eMMC boot points to NVMe root" boot_points_to_root
 check "panel backlight" panel_backlight_ok
 check "panel DSI initialization" panel_dsi_ok
-check "MT7921 USB driver" modinfo mt7921u
+check "MT7921 USB driver" mt7921u_driver_ok
 check "HackerGadgets package" package_ok hackergadgets-uconsole-aio-board
 check "Meshtastic UI package" package_ok meshtastic-mui
 check "SDR package" package_ok sdrpp-brown
@@ -57,5 +67,7 @@ check "AC1200 USB device" wifi_usb_ok
 check "AC1200 network interface" wifi_interface_ok
 check "RTC" rtc_ok
 check "SHTF storage" storage_ok
+check "SHTF package and service" shtf_service_ok
+check "SHTF HTTP health" shtf_health_ok
 check "no failed systemd units" systemd_ok
 exit "$fail"

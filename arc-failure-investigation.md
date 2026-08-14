@@ -267,3 +267,47 @@
   separately without invoking ARM target code on the runner. For root-only images,
   inspect physical mounted path `/root/.pygpsclient/...`; host-side traversal of
   image link `/home/root -> /root` would otherwise escape into runner `/root`.
+
+### Physical boot gate: solid activity LED and black internal panel
+
+- Gate: first normal boot on 2026-08-12 after flashing Debian artifact from run
+  `31518782492`, commit `fa6f3ac`, image SHA-256
+  `24958f58eb8130b6efb06b86dd0c546b7e2e8a229bbacbb9167d029e2fed6738`.
+- Flash transport and media corruption are ruled out: 12 GiB eMMC readback was
+  byte-identical to the source image. MASKROM USB disappeared after normal boot,
+  but the internal screen stayed black and the CM5 activity LED stayed solid.
+  No new DHCP/mDNS neighbor appeared. The supplied MAC `60:cf:84:62:f4:b3`
+  was positively identified as the workstation's `eno1`, so it is excluded.
+- Leading hypotheses: bootloader/kernel does not reach userspace; AIO2 or 2 TB
+  NVMe causes power/short instability; Linux boots but lacks display and network
+  configuration. Panel-only failure is weakened by Radxa's documented activity
+  LED behavior: blue should blink after Linux enters the system.
+- Smallest discriminating experiments, in order: observe HDMI or serial output;
+  attach AIO2 Ethernet and probe for a new DHCP identity; then cold-boot once
+  with NVMe removed while leaving eMMC unchanged. Do not reflash until one probe
+  implicates image/bootloader state.
+- NVMe-isolation result: removing the 2 TB NVMe did not change the solid blue
+  LED, black panel, absent normal-mode USB, or absent LAN identity. NVMe media
+  and PCIe enumeration are therefore not the primary boot blocker.
+- Next discriminator: cold-boot without the AIO2/RJ45 expansion board. The
+  HackerGadgets product warning says an incorrectly oriented expansion ribbon
+  can prevent boot and must not be powered or charged; a 2026 Radxa CM5/AIO2
+  report also reproduced boot failure only while the AIO2 was installed.
+
+### Radxa boot layout and CWU50 backlight contract
+
+- Root boot failure cause confirmed: image assembly mounted rsdk-b3's p2 `efi`
+  filesystem at `/boot`, but image fstab and upstream extlinux contract mount it
+  at `/boot/efi` and keep kernel/extlinux on rootfs `/boot`. Generated extlinux
+  therefore omitted `fdtdir`; U-Boot had no CM5 base DTB and never mounted root.
+- Diagnostic boot without overlays produced the same failure, while restoring
+  rootfs `/boot`, `/boot/vmlinuz-*`, and `fdtdir /usr/lib/linux-image-*` caused
+  Linux activity and first-boot root expansion. Full corrected-image eMMC
+  readback matched its source SHA-256 byte-for-byte.
+- Display gate then failed with a dark internal panel. Captured target journal
+  proved kernel/userspace boot and showed `panel-cwu50` detecting the new panel,
+  reaching `devm_of_find_backlight`, then leaving MIPI DSI deferred forever.
+- Composed DTB contains a valid `ocp8178-backlight` node and panel phandle, but
+  running kernel config says `# CONFIG_BACKLIGHT_OCP8178 is not set`. This is
+  the exact missing driver. Minimal fix: build it as a module, assert the config,
+  retain rootfs boot layout, rebuild image, then verify live panel/DRM state.

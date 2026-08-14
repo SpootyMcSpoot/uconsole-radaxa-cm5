@@ -218,10 +218,21 @@ jobs:
           assert_partition "${LOOP_DEVICE}p2" efi vfat
           assert_partition "${LOOP_DEVICE}p3" rootfs ext4
 
-          mkdir -p ./mnt/root
+          mkdir -p ./mnt/{config,root}
+          sudo mount ${LOOP_DEVICE}p1 ./mnt/config
           sudo mount ${LOOP_DEVICE}p3 ./mnt/root
-          sudo mkdir -p ./mnt/root/boot
-          sudo mount ${LOOP_DEVICE}p2 ./mnt/root/boot
+          # Radxa rsdk-b3 keeps kernel/extlinux in rootfs:/boot. p2 is the
+          # separate EFI filesystem mounted by fstab at /boot/efi, not /boot.
+          sudo mkdir -p ./mnt/root/boot/efi
+
+          # Keep remote recovery available on the first normal boot. The stock
+          # config script otherwise disables ssh unless its headless heuristic
+          # succeeds, which is unsuitable while validating a new panel kernel.
+          sudo sed -i -E \
+            '/^disable_service[[:space:]]+ssh([.]socket)?$/d; s/^if[[:space:]]+headless[[:space:]]+enable_service[[:space:]]+ssh$/enable_service ssh/' \
+            ./mnt/config/before.txt
+          sudo grep -qxF 'enable_service ssh' ./mnt/config/before.txt || \
+            printf '%s\n' 'enable_service ssh' | sudo tee -a ./mnt/config/before.txt >/dev/null
 
           # Some third-party package scripts compile against /proc/cpuinfo and
           # require a PTY. Bind only proc/dev; never bind /run, which could let
@@ -315,16 +326,16 @@ jobs:
           sudo install -d -m 0755 ./mnt/root/boot/firmware
           printf '\n' | sudo tee ./mnt/root/boot/firmware/cmdline.txt >/dev/null
 
-          # Radxa's u-boot-menu prepends the mounted /boot path when /boot is a
-          # separate filesystem, so its overlay directory must be boot-relative.
-          # Stage overlays before kernel hooks generate extlinux.conf.
+          # Stage overlays before kernel hooks generate extlinux.conf. U-Boot
+          # scans rootfs:/boot, so preserve root-relative /boot paths and the
+          # kernel package's fdtdir entry for the CM5 base device tree.
           sudo mkdir -p ./mnt/root/boot/dtbo
           sudo install -m 0644 compiled_overlays/*.dtbo ./mnt/root/boot/dtbo/
           sudo sed -i -E '/^[[:space:]]*U_BOOT_FDT_OVERLAYS(_DIR)?=/d' \
             ./mnt/root/etc/default/u-boot
           cat <<'EOF' | sudo tee -a ./mnt/root/etc/default/u-boot >/dev/null
           U_BOOT_FDT_OVERLAYS="axp20x.dtbo cwu50_panel.dtbo displaystuff.dtbo aio2_radxa_rails.dtbo"
-          U_BOOT_FDT_OVERLAYS_DIR="/dtbo"
+          U_BOOT_FDT_OVERLAYS_DIR="/boot/dtbo/"
           EOF
 
           # Install kernel
@@ -444,16 +455,24 @@ jobs:
           sudo test -x ./mnt/root/usr/bin/systemctl
           sudo test ! -e ./mnt/root/usr/bin/logname.distrib
           sudo test ! -e ./mnt/root/usr/sbin/policy-rc.d
+          sudo test "$(grep -cxF 'enable_service ssh' ./mnt/config/before.txt)" -eq 1
+          sudo test "$(grep -Ec '^disable_service[[:space:]]+ssh([.]socket)?$' ./mnt/config/before.txt)" -eq 0
           sudo test -d ./mnt/root/boot/extlinux
+          sudo grep -Eq '^[[:space:]]*linux /boot/vmlinuz-' \
+            ./mnt/root/boot/extlinux/extlinux.conf
+          sudo grep -Eq '^[[:space:]]*initrd /boot/initrd\.img-' \
+            ./mnt/root/boot/extlinux/extlinux.conf
+          sudo grep -Eq '^[[:space:]]*fdtdir /usr/lib/linux-image-' \
+            ./mnt/root/boot/extlinux/extlinux.conf
           for overlay in axp20x.dtbo cwu50_panel.dtbo displaystuff.dtbo aio2_radxa_rails.dtbo; do
             sudo test -s "./mnt/root/boot/dtbo/$overlay"
-            sudo grep -Eq "^[[:space:]]*fdtoverlays .* /dtbo/$overlay([[:space:]]|$)" \
+            sudo grep -Eq "^[[:space:]]*fdtoverlays .* /boot/dtbo/$overlay([[:space:]]|$)" \
               ./mnt/root/boot/extlinux/extlinux.conf
           done
           echo 'Static image assertions: complete'
 
           sudo sync
-          sudo umount ./mnt/root/boot
+          sudo umount ./mnt/config
           sudo umount ./mnt/root
           sudo losetup -d $LOOP_DEVICE
 
@@ -462,7 +481,8 @@ jobs:
         run: |
           sudo umount -R ./mnt/root/dev 2>/dev/null || true
           sudo umount ./mnt/root/proc 2>/dev/null || true
-          sudo umount ./mnt/root/boot ./mnt/root 2>/dev/null || true
+          sudo umount ./mnt/config 2>/dev/null || true
+          sudo umount ./mnt/root 2>/dev/null || true
           LOOP_DEVICE=$(losetup -a | grep debian.img | cut -d: -f1 || true)
           if [ -n "$LOOP_DEVICE" ]; then
             sudo losetup -d $LOOP_DEVICE || true

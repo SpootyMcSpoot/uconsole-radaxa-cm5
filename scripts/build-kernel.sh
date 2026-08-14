@@ -83,12 +83,13 @@ make rockchip_linux_defconfig
 ./scripts/config --module CONFIG_BT_HCIBTUSB
 ./scripts/config --enable CONFIG_BT_HCIBTUSB_MTK
 ./scripts/config --module CONFIG_DRM_PANEL_CWU50
+./scripts/config --module CONFIG_BACKLIGHT_OCP8178
 ./scripts/config --enable CONFIG_NEW_LEDS
 ./scripts/config --enable CONFIG_LEDS_CLASS
 ./scripts/config --enable CONFIG_LEDS_GPIO
 make olddefconfig
 
-for symbol in BLK_DEV_NVME MT7921U BT_HCIBTUSB DRM_PANEL_CWU50 LEDS_GPIO; do
+for symbol in BLK_DEV_NVME MT7921U BT_HCIBTUSB DRM_PANEL_CWU50 BACKLIGHT_OCP8178 LEDS_GPIO; do
     grep -Eq "^CONFIG_${symbol}=(y|m)$" .config || {
         echo "Required kernel symbol CONFIG_${symbol} missing" >&2
         exit 1

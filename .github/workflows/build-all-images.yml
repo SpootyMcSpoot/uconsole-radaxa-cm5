@@ -360,6 +360,13 @@ jobs:
             apt-get install -y --no-upgrade python3-venv
             cd /opt/hackergadgets/aiov2_ctl
             python3 aiov2_ctl.py --install
+            /usr/local/bin/aiov2_ctl --add-apps
+            apt-get install -y --install-recommends --no-upgrade \
+              hackergadgets-uconsole-aio-board meshtastic-mui sdrpp-brown \
+              tar1090 pygpsclient
+            # --add-apps installs its own all-off defaults. Apply the CM5/AIO2
+            # boot policy afterwards so SDR and the AC USB expansion rail are
+            # live on every boot.
             cat >/usr/local/share/aiov2_ctl/config.json <<'AIO2_EOF'
           {
             "rails_on_boot": {
@@ -371,10 +378,12 @@ jobs:
             "mesh_on_boot": false
           }
           AIO2_EOF
-            /usr/local/bin/aiov2_ctl --add-apps
-            apt-get install -y --install-recommends --no-upgrade \
-              hackergadgets-uconsole-aio-board meshtastic-mui sdrpp-brown \
-              tar1090 pygpsclient
+            # OCP8178 owns backlight on Radxa; the package's Raspberry Pi GPIO9
+            # unit is incompatible. NVMe-oF autoconnect is unrelated to the
+            # local PCIe NVMe root and fails when nvme-fabrics is unavailable.
+            systemctl disable backlight.service nvmf-autoconnect.service 2>/dev/null || true
+            sed -i '/^[[:space:]]*smartd_opts=/d' /etc/default/smartmontools
+            echo 'smartd_opts="--quit=never"' >>/etc/default/smartmontools
             systemctl enable ssh
             systemctl enable aiov2-rails-boot.service
             systemctl disable meshtasticd.service 2>/dev/null || true
@@ -440,8 +449,13 @@ jobs:
           test "$(sudo readlink ./mnt/root/usr/local/bin/pygpsclient)" = "$PYGPSCLIENT_VENV"
           sudo test -x "$PYGPSCLIENT_IMAGE_PATH"
           sudo test -s ./mnt/root/usr/local/share/aiov2_ctl/config.json
+          sudo grep -q '"SDR": true' ./mnt/root/usr/local/share/aiov2_ctl/config.json
+          sudo grep -q '"USB": true' ./mnt/root/usr/local/share/aiov2_ctl/config.json
           sudo test -s ./mnt/root/etc/systemd/system/aiov2-rails-boot.service
           sudo test -L ./mnt/root/etc/systemd/system/multi-user.target.wants/aiov2-rails-boot.service
+          sudo test ! -e ./mnt/root/etc/systemd/system/multi-user.target.wants/backlight.service
+          sudo test ! -e ./mnt/root/etc/systemd/system/default.target.wants/nvmf-autoconnect.service
+          sudo grep -qx 'smartd_opts="--quit=never"' ./mnt/root/etc/default/smartmontools
           sudo test -s ./mnt/root/usr/share/keyrings/ak-rex.gpg
           sudo test -d ./mnt/root/lib/firmware/mediatek
           sudo test -d ./mnt/root/srv/shtf-box/packages

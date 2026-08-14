@@ -21,6 +21,14 @@ boot_points_to_root() {
     grep -Eq "(^|[[:space:]])root=UUID=$uuid([[:space:]]|$)" /boot/extlinux/extlinux.conf
 }
 panel_backlight_ok() { compgen -G '/sys/class/backlight/*/brightness' >/dev/null; }
+panel_dsi_ok() {
+    local connector
+    connector=$(find /sys/class/drm -maxdepth 1 -type l -name 'card*-DSI-*' | head -n 1)
+    [[ -n $connector ]] || return 1
+    [[ $(cat "$connector/status") == connected ]] || return 1
+    grep -qx '720x1280' "$connector/modes" || return 1
+    ! dmesg | grep -Eq 'command interface is busy|panel-cwu50.*failed to (exit sleep mode|turn display on)'
+}
 rail_high() { pinctrl get "$1" 2>/dev/null | grep -qw hi; }
 rtc_ok() { hwclock --show >/dev/null 2>&1; }
 wifi_usb_ok() { lsusb | grep -Eqi 'MediaTek|MT7921|0e8d:'; }
@@ -33,6 +41,7 @@ check "root on NVMe" root_on_nvme
 check "NVMe device" has_nvme
 check "eMMC boot points to NVMe root" boot_points_to_root
 check "panel backlight" panel_backlight_ok
+check "panel DSI initialization" panel_dsi_ok
 check "MT7921 USB driver" modinfo mt7921u
 check "HackerGadgets package" package_ok hackergadgets-uconsole-aio-board
 check "Meshtastic UI package" package_ok meshtastic-mui

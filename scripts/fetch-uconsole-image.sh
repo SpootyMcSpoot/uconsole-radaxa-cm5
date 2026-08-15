@@ -11,7 +11,8 @@ Options:
 
 Downloads the debian-image artifact only when absent, stages GitHub CLI's ZIP
 inside the cache instead of quota-limited /tmp, verifies compressed SHA/XZ,
-retains the raw image, and verifies or generates its SHA-256 sidecar.
+retains the raw image, verifies or generates its SHA-256 sidecar, and fetches
+the pinned Radxa RK3588 loader with a pinned checksum.
 EOF
 }
 
@@ -31,7 +32,7 @@ done
 [[ $run_id =~ ^[1-9][0-9]*$ ]] || { echo "Invalid --run-id" >&2; exit 2; }
 [[ $repo =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || { echo "Invalid --repo" >&2; exit 2; }
 [[ -n $output_dir ]] || output_dir="$PWD/uconsole-staging/run-$run_id"
-for command in gh sha256sum xz find; do
+for command in gh sha256sum xz find curl; do
     command -v "$command" >/dev/null || { echo "Missing command: $command" >&2; exit 1; }
 done
 
@@ -70,5 +71,20 @@ fi
     sha256sum -c "$(basename "$raw_sidecar")"
 )
 
+loader_name=rk3588_spl_loader_v1.15.113.bin
+loader_url=https://dl.radxa.com/rock5/sw/images/loader/rock-5a/rk3588_spl_loader_v1.15.113.bin
+loader_sha=26baab70e6b915364f7d73d88298366db1bfc346e34683e95d3d11b52492047f
+loader="$output_dir/$loader_name"
+if ! printf '%s  %s\n' "$loader_sha" "$loader" | sha256sum -c - >/dev/null 2>&1; then
+    loader_part="$output_dir/.tmp/$loader_name.part"
+    curl -fL --retry 3 --output "$loader_part" "$loader_url"
+    printf '%s  %s\n' "$loader_sha" "$loader_part" | sha256sum -c -
+    mv -f "$loader_part" "$loader"
+else
+    echo "PASS cached RK3588 loader"
+fi
+
 printf 'RAW_IMAGE=%s\n' "$raw"
 printf 'RAW_SHA256=%s\n' "$(awk '{print $1}' "$raw_sidecar")"
+printf 'LOADER=%s\n' "$loader"
+printf 'LOADER_SHA256=%s\n' "$loader_sha"

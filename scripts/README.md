@@ -40,6 +40,10 @@ scripts/fetch-uconsole-image.sh --run-id 31854866795 \
   --output-dir /var/home/pestilence/uconsole-staging/run-31854866795
 ```
 
+The fetch helper also downloads Radxa's pinned
+`rk3588_spl_loader_v1.15.113.bin` and verifies SHA-256
+`26baab70e6b915364f7d73d88298366db1bfc346e34683e95d3d11b52492047f`.
+
 One command drives flash, post-reboot provisioning, optional NVMe migration,
 and validation. It waits automatically; only turning the physical Maskrom
 switch off and power-cycling after flash cannot be automated:
@@ -48,7 +52,7 @@ switch off and power-cycling after flash cannot be automated:
 SSHPASS='<ssh-password>' SUDO_PASSWORD='<sudo-password>' \
   scripts/deploy-uconsole.sh \
   --image radxa-cm5-uconsole_debian_bookworm.img \
-  --loader rk3588_spl_loader.bin \
+  --loader /var/home/pestilence/uconsole-staging/run-31854866795/rk3588_spl_loader_v1.15.113.bin \
   --sha256 <published-raw-image-sha256> \
   --host 192.168.0.146 \
   --shtf-deb /path/to/shtf-box_arm64.deb
@@ -62,7 +66,7 @@ Build/download raw Debian image, then flash one CM5 connected in Maskrom mode:
 ```bash
 sudo scripts/flash-uconsole-maskrom.sh \
   --image radxa-cm5-uconsole_debian_bookworm.img \
-  --loader rk3588_spl_loader.bin \
+  --loader /var/home/pestilence/uconsole-staging/run-31854866795/rk3588_spl_loader_v1.15.113.bin \
   --sha256 <published-raw-image-sha256>
 ```
 

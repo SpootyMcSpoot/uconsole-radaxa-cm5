@@ -48,3 +48,4 @@ Never pass `--migrate-nvme` until `/dev/nvme0n1` exists and reports the expected
 - [ResistanceIsUseless/uconsole-radaxa-cm5](https://github.com/ResistanceIsUseless/uconsole-radaxa-cm5)
 - [AK-Rex ClockworkRadxa Linux](https://github.com/ak-rex/ClockworkRadxa-linux)
 - [HackerGadgets AIO2 controller](https://github.com/hackergadgets/aiov2_ctl)
+- [Radxa CM5 download documentation](https://docs.radxa.com/en/compute-module/cm5/download)

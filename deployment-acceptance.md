@@ -8,6 +8,9 @@ Operator host `bugoutbox` / `192.168.0.10` is explicitly out of target scope.
 - Radxa rkr5.1 kernel CI: [run 31871935060](https://github.com/SpootyMcSpoot/uconsole-radaxa-cm5/actions/runs/31871935060), passed at commit `8e49015`.
 - Installed kernel package SHA-256: `e2d7b35bb09a76c1e1b90d3ef176580969536679ff2c0c88087eb56b35c8c8f9`.
 - Installed rkr5.1 panel module SHA-256: `1ed700f52d717351742a083c25fdf32f922301c16b84e7c5621f33861f59a488`.
+- Final rkr5.1 Debian CI: [run 31873951514](https://github.com/SpootyMcSpoot/uconsole-radaxa-cm5/actions/runs/31873951514), passed by reusing run `31871935060`'s kernel artifact.
+- Final rkr5.1 compressed image SHA-256: `bb2057b56e7eb23f54e11961fc380738d5eff0a6f4f8851dd5bdc1b5e855ac05`.
+- Final rkr5.1 raw image SHA-256: `e4f8a481724c54a1b83dce8cd4235624b12389f8bd1e25f800028eff7920a742`.
 - Kernel CI: [run 31846652709](https://github.com/SpootyMcSpoot/uconsole-radaxa-cm5/actions/runs/31846652709), passed.
 - Kernel image SHA-256: `a752fef71aab9eab5b5778b316a14f1776d9f9d10899b09335a04bcf903859c7`.
 - Installed panel module SHA-256: `533f42f0d9ae2e268bf951d323a60f703a4ea2bb05abf3856f3133fbbe128fde`.
@@ -32,9 +35,10 @@ Operator host `bugoutbox` / `192.168.0.10` is explicitly out of target scope.
 | NVMe `/content` storage | Samsung 990 PRO firmware `5B2QJXD7` links and enumerates, then the same end-LBA read drops PCIe at 37 seconds on 6.1.43, 6.1.84, and new Radxa 6.1.115. Gen1, Gen2, low AIO load, ASPM/APST disabled, and `pcie_port_pm=off` all reproduce it. Guarded helper refuses the absent block device; no format/fstab change occurred | BLOCKED: update SSD externally to Samsung `8B2QJXD7` on a stable native M.2 host or replace it with a confirmed low-power drive, then rerun read-only preflight |
 | RTC | PCF85063 at I2C7 `0x51` reports chip absent; no `/dev/rtc*` | BLOCKED: hardware absent |
 
-Repeatable image run `31867820447` passed at commit `242636c`. Cached artifact
-SHA-256: raw `30e33fc4aed61161a550b0fc757a214cfb9122692671e9f6fa8d2eb06100e522`;
-XZ `24c18c14efc486ae1fdfe208a0786b80ed3af709354b92e473d7e6ffcdff19fb`.
+Latest repeatable image run `31873951514` passed at commit `8e49015`, reusing
+the passed kernel artifact rather than recompiling. Cached artifact SHA-256:
+raw `e4f8a481724c54a1b83dce8cd4235624b12389f8bd1e25f800028eff7920a742`;
+XZ `bb2057b56e7eb23f54e11961fc380738d5eff0a6f4f8851dd5bdc1b5e855ac05`.
 
 ## Repeatable operation
 

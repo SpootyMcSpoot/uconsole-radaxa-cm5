@@ -584,3 +584,11 @@
   blockers (NVMe device, NVMe `/content`, RTC). The destructive storage helper
   rejected absent `/dev/nvme0n1`; `/etc/fstab` retained zero NVMe entries and
   `/content` remained an eMMC directory.
+- Full Debian image run `31873951514` reused the passed rkr5.1 kernel artifact
+  and passed package, static-policy, compression, and upload gates. The
+  cache-aware fetcher verified XZ SHA-256
+  `bb2057b56e7eb23f54e11961fc380738d5eff0a6f4f8851dd5bdc1b5e855ac05`,
+  decompressed a 12 GiB raw image with SHA-256
+  `e4f8a481724c54a1b83dce8cd4235624b12389f8bd1e25f800028eff7920a742`,
+  and verified the pinned RK3588 loader SHA-256
+  `26baab70e6b915364f7d73d88298366db1bfc346e34683e95d3d11b52492047f`.

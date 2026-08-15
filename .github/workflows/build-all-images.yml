@@ -249,6 +249,8 @@ jobs:
           # they are never executed on the GitHub runner or operator workstation.
           sudo install -D -m 0755 scripts/target/uconsole-bootstrap-nvme-root \
             ./mnt/root/usr/local/sbin/uconsole-bootstrap-nvme-root
+          sudo install -D -m 0755 scripts/target/uconsole-bootstrap-nvme-storage \
+            ./mnt/root/usr/local/sbin/uconsole-bootstrap-nvme-storage
           sudo install -D -m 0755 scripts/target/uconsole-install-hackergadgets \
             ./mnt/root/usr/local/sbin/uconsole-install-hackergadgets
           sudo install -D -m 0755 scripts/target/uconsole-validate-hardware \
@@ -450,6 +452,7 @@ jobs:
           # and boot files must exist before publishing.
           echo 'Static image assertions: begin'
           sudo test -x ./mnt/root/usr/local/sbin/uconsole-bootstrap-nvme-root
+          sudo test -x ./mnt/root/usr/local/sbin/uconsole-bootstrap-nvme-storage
           sudo test -x ./mnt/root/usr/local/sbin/uconsole-install-hackergadgets
           sudo test -x ./mnt/root/usr/local/sbin/uconsole-validate-hardware
           sudo test -x ./mnt/root/usr/local/bin/aiov2_ctl

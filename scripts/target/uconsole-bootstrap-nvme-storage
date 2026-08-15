@@ -1,0 +1,136 @@
+#!/bin/bash
+set -Eeuo pipefail
+
+usage() {
+    echo "Usage: sudo uconsole-bootstrap-nvme-storage --device /dev/nvme0n1 --yes"
+}
+
+device=""
+confirmed=false
+while (($#)); do
+    case "$1" in
+        --device) device=${2:-}; shift 2 ;;
+        --yes) confirmed=true; shift ;;
+        -h|--help) usage; exit 0 ;;
+        *) echo "Unknown argument: $1" >&2; usage >&2; exit 2 ;;
+    esac
+done
+
+[[ $EUID -eq 0 ]] || { echo "Must run as root" >&2; exit 1; }
+[[ $(uname -m) == aarch64 ]] || { echo "Refusing: target is not aarch64" >&2; exit 1; }
+model=$(tr -d '\0' </proc/device-tree/model 2>/dev/null || true)
+[[ $model == "Radxa CM5 RPI CM4 IO" ]] || { echo "Refusing target model: $model" >&2; exit 1; }
+$confirmed || { echo "Refusing destructive NVMe initialization without --yes" >&2; exit 2; }
+[[ $device =~ ^/dev/nvme[0-9]+n[0-9]+$ && -b $device ]] || {
+    echo "Refusing invalid NVMe block device: $device" >&2
+    exit 1
+}
+
+for command in blockdev findmnt lsblk blkid sgdisk wipefs mkfs.ext4 rsync \
+    udevadm partprobe mount mountpoint umount systemctl curl; do
+    command -v "$command" >/dev/null || { echo "Missing required command: $command" >&2; exit 1; }
+done
+
+root_source=$(findmnt -n -o SOURCE /)
+[[ $root_source != "$device"* ]] || { echo "Refusing root device: $device" >&2; exit 1; }
+device_size=$(blockdev --getsize64 "$device")
+((device_size >= 1500000000000 && device_size <= 2500000000000)) || {
+    echo "Refusing: expected 2 TB NVMe, got $device_size bytes" >&2
+    exit 1
+}
+content_source=$(findmnt -n -o SOURCE /content 2>/dev/null || true)
+if [[ $content_source == "$device"* ]]; then
+    echo "PASS NVMe already mounted at /content: $content_source"
+    exit 0
+fi
+[[ -z $content_source ]] || { echo "Refusing existing /content mount: $content_source" >&2; exit 1; }
+if lsblk -nrpo MOUNTPOINTS "$device" | grep -q '[^[:space:]]'; then
+    echo "Refusing: $device or a partition is mounted" >&2
+    exit 1
+fi
+[[ -d /content && ! -L /content ]] || { echo "Refusing missing/non-directory /content" >&2; exit 1; }
+
+stamp=$(date -u +%Y%m%dT%H%M%SZ)
+evidence="/var/log/uconsole-nvme-storage-$stamp"
+mkdir -p "$evidence"
+{
+    echo "model=$model"
+    echo "source_root=$root_source"
+    echo "target=$device"
+    echo "target_bytes=$device_size"
+    lsblk -e7 -o NAME,PATH,SIZE,TYPE,FSTYPE,UUID,MOUNTPOINTS
+} >"$evidence/preflight.txt"
+
+mount_temp=/mnt/uconsole-nvme-content
+content_backup="/content.emmc-backup-$stamp"
+fstab_backup="/etc/fstab.pre-nvme-content-$stamp"
+content_swapped=false
+fstab_changed=false
+service_was_active=false
+systemctl is-active --quiet shtf-box.service && service_was_active=true || true
+
+rollback() {
+    local rc=$?
+    trap - ERR
+    set +e
+    systemctl stop shtf-box.service 2>/dev/null
+    mountpoint -q "$mount_temp" && umount "$mount_temp"
+    mountpoint -q /content && umount /content
+    if [[ $fstab_changed == true && -f $fstab_backup ]]; then
+        cp -a "$fstab_backup" /etc/fstab
+    fi
+    if [[ $content_swapped == true && -d $content_backup ]]; then
+        rmdir /content 2>/dev/null
+        mv "$content_backup" /content
+    fi
+    [[ $service_was_active == false ]] || systemctl start shtf-box.service
+    echo "NVMe storage setup failed; eMMC /content rollback attempted" >&2
+    exit "$rc"
+}
+trap rollback ERR
+
+wipefs --all "$device"
+sgdisk --zap-all "$device"
+sgdisk --new=1:0:0 --typecode=1:8300 --change-name=1:shtf-content "$device"
+partprobe "$device"
+udevadm settle
+partition="${device}p1"
+[[ -b $partition ]] || { echo "Partition did not appear: $partition" >&2; false; }
+mkfs.ext4 -F -L SHTF_CONTENT "$partition"
+
+mkdir -p "$mount_temp"
+mount "$partition" "$mount_temp"
+[[ $service_was_active == false ]] || systemctl stop shtf-box.service
+rsync -aHAXx --numeric-ids --info=stats2 /content/ "$mount_temp"/
+sync
+content_uuid=$(blkid -s UUID -o value "$partition")
+[[ -n $content_uuid ]] || { echo "Missing content filesystem UUID" >&2; false; }
+umount "$mount_temp"
+
+cp -a /etc/fstab "$fstab_backup"
+awk '$2 != "/content" {print}' /etc/fstab >"$evidence/fstab.new"
+printf 'UUID=%s /content ext4 defaults,noatime,nofail,x-systemd.device-timeout=10s 0 2\n' \
+    "$content_uuid" >>"$evidence/fstab.new"
+install -m 0644 "$evidence/fstab.new" /etc/fstab
+fstab_changed=true
+
+mv /content "$content_backup"
+content_swapped=true
+mkdir -m 0755 /content
+mount /content
+[[ $(findmnt -n -o UUID /content) == "$content_uuid" ]] || {
+    echo "Mounted /content UUID mismatch" >&2
+    false
+}
+[[ -L /srv/shtf-box && $(readlink /srv/shtf-box) == /content ]] || ln -sfn /content /srv/shtf-box
+if systemctl list-unit-files shtf-box.service --no-legend 2>/dev/null | grep -q '^shtf-box[.]service'; then
+    systemctl enable --now shtf-box.service
+    curl -fsS --max-time 10 http://127.0.0.1:8080/api/v1/health >/dev/null
+fi
+
+printf 'content_uuid=%s\npartition=%s\nemmc_backup=%s\nfstab_backup=%s\n' \
+    "$content_uuid" "$partition" "$content_backup" "$fstab_backup" >"$evidence/result.txt"
+sync
+trap - ERR
+echo "PASS NVMe storage mounted at /content: $partition UUID=$content_uuid"
+echo "eMMC content backup retained at $content_backup"

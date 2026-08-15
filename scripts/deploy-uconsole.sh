@@ -10,13 +10,14 @@ Options:
   --user USER          SSH user (default: radxa)
   --wait-seconds N     Maximum wait after each reboot (default: 900)
   --migrate-nvme DEV   Migrate root after provisioning (destructive to DEV)
+  --nvme-storage DEV   Keep eMMC root; use expected 2 TB NVMe for /content
   --shtf-deb FILE      Install verified arm64 shtf-box package
   --skip-flash         Provision/validate an already booted target
 
 Set SSHPASS and SUDO_PASSWORD for password authentication. The script flashes
 one exact RK3588 Maskrom target, waits for the physical Maskrom-off reboot,
-requires exact Radxa CM5 identity, provisions packages, optionally migrates to
-NVMe, then runs full validation. No target script executes on the operator host.
+requires exact Radxa CM5 identity, provisions packages, optionally configures
+NVMe storage, then runs full validation. No target script executes on the operator host.
 EOF
 }
 
@@ -27,6 +28,7 @@ host=""
 user=radxa
 wait_seconds=900
 nvme_device=""
+nvme_storage_device=""
 shtf_deb=""
 skip_flash=false
 while (($#)); do
@@ -38,6 +40,7 @@ while (($#)); do
         --user) user=${2:-}; shift 2 ;;
         --wait-seconds) wait_seconds=${2:-}; shift 2 ;;
         --migrate-nvme) nvme_device=${2:-}; shift 2 ;;
+        --nvme-storage) nvme_storage_device=${2:-}; shift 2 ;;
         --shtf-deb) shtf_deb=${2:-}; shift 2 ;;
         --skip-flash) skip_flash=true; shift ;;
         -h|--help) usage; exit 0 ;;
@@ -47,6 +50,10 @@ done
 
 [[ -n $host ]] || { echo "Missing --host" >&2; exit 2; }
 [[ $wait_seconds =~ ^[1-9][0-9]*$ ]] || { echo "Invalid --wait-seconds" >&2; exit 2; }
+[[ -z $nvme_device || -z $nvme_storage_device ]] || {
+    echo "Choose either root migration or /content storage, not both" >&2
+    exit 2
+}
 [[ $host != localhost && $host != 127.* && $host != ::1 ]] || {
     echo "Refusing localhost target: $host" >&2
     exit 2
@@ -95,6 +102,7 @@ fi
 wait_for_target
 provision_args=(--host "$host" --user "$user" --provision --allow-emmc --no-validate)
 [[ -z $shtf_deb ]] || provision_args+=(--shtf-deb "$shtf_deb")
+[[ -z $nvme_storage_device ]] || provision_args+=(--nvme-storage "$nvme_storage_device")
 "$provision_script" "${provision_args[@]}"
 
 if [[ -n $nvme_device ]]; then

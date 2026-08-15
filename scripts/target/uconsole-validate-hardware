@@ -10,8 +10,11 @@ check() {
     if "$@"; then printf 'PASS %s\n' "$label"; else printf 'FAIL %s\n' "$label"; fail=1; fi
 }
 is_radxa() { tr -d '\0' </proc/device-tree/model | grep -Eqi 'radxa.*cm5|rk3588s'; }
-root_on_nvme() { findmnt -n -o SOURCE / | grep -q '^/dev/nvme'; }
+root_on_emmc() { findmnt -n -o SOURCE / | grep -q '^/dev/mmcblk'; }
 has_nvme() { nvme list 2>/dev/null | grep -q /dev/nvme; }
+nvme_content_ok() {
+    findmnt -n -o SOURCE,FSTYPE /content 2>/dev/null | grep -Eq '^/dev/nvme.+[[:space:]]+ext4$'
+}
 package_ok() { dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q 'install ok installed'; }
 storage_ok() {
     [[ -d /content/packages && -f /etc/shtf-box/storage.env ]] &&
@@ -26,7 +29,6 @@ shtf_health_ok() { curl -fsS --max-time 5 http://127.0.0.1:8080/api/v1/health | 
 systemd_ok() { [[ $(systemctl --failed --no-legend 2>/dev/null | wc -l) -eq 0 ]]; }
 boot_points_to_root() {
     local uuid
-    root_on_nvme || return 1
     uuid=$(findmnt -n -o UUID /)
     grep -Eq "(^|[[:space:]])root=UUID=$uuid([[:space:]]|$)" /boot/extlinux/extlinux.conf
 }
@@ -63,9 +65,10 @@ xorg_dsi_ok() {
 
 check "aarch64" test "$(uname -m)" = aarch64
 check "Radxa CM5 model" is_radxa
-check "root on NVMe" root_on_nvme
+check "root on eMMC" root_on_emmc
 check "NVMe device" has_nvme
-check "eMMC boot points to NVMe root" boot_points_to_root
+check "NVMe mounted at /content" nvme_content_ok
+check "boot config points to active root" boot_points_to_root
 check "panel backlight" panel_backlight_ok
 check "panel DSI initialization" panel_dsi_ok
 check "desktop packages" desktop_packages_ok

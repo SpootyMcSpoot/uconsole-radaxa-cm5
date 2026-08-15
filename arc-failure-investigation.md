@@ -504,3 +504,19 @@
   multiline upload path made the glob literal. Remove those quotes for future
   runs. Local staging contains the derived raw sidecar for this successful
   artifact.
+
+### eMMC-root with NVMe content storage
+
+- The live eMMC is 233 GB with more than 214 GB free, so root migration is not
+  required. Keeping boot/root on eMMC removes PCIe availability from the boot
+  path; the selected architecture uses the expected 2 TB NVMe only at
+  `/content` for SHTF data, models, maps, media, and caches.
+- Guarded live execution passed exact CM5 identity, installed the target-only
+  storage helper, then stopped before helper execution because
+  `/dev/nvme0n1` remained absent. Block and PCI enumeration still show no NVMe,
+  proving storage policy was not the detection blocker. No partition table,
+  filesystem, mount, or fstab entry was changed.
+- The helper requires an exact NVMe device path, 1.5–2.5 TB byte capacity, no
+  existing mounts, and explicit `--yes`. It formats only that disk, copies
+  existing `/content`, retains an eMMC backup, mounts by UUID with `nofail`,
+  validates SHTF health, and rolls back fstab/content placement on failure.

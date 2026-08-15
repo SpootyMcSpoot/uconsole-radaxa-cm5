@@ -8,8 +8,9 @@ Usage: scripts/provision-uconsole-over-ssh.sh --host HOST [options]
 Options:
   --user USER          SSH user (default: radxa)
   --provision          Run idempotent HackerGadgets/XFCE provisioning
-  --allow-emmc         Permit provisioning before NVMe migration
+  --allow-emmc         Permit package provisioning on eMMC root
   --migrate-nvme DEV   Migrate root to exact NVMe device (destructive)
+  --nvme-storage DEV   Format expected 2 TB NVMe and mount it at /content
   --shtf-deb FILE      Install verified arm64 shtf-box package
   --reboot             Reboot after successful provisioning
   --identity-only      Stop after local-address and target-model checks
@@ -27,6 +28,7 @@ user=radxa
 provision=false
 allow_emmc=false
 nvme_device=""
+nvme_storage_device=""
 shtf_deb=""
 reboot=false
 identity_only=false
@@ -39,6 +41,7 @@ while (($#)); do
         --provision) provision=true; shift ;;
         --allow-emmc) allow_emmc=true; shift ;;
         --migrate-nvme) nvme_device=${2:-}; shift 2 ;;
+        --nvme-storage) nvme_storage_device=${2:-}; shift 2 ;;
         --shtf-deb) shtf_deb=${2:-}; shift 2 ;;
         --reboot) reboot=true; shift ;;
         --identity-only) identity_only=true; shift ;;
@@ -54,6 +57,17 @@ done
     exit 2
 }
 [[ $user =~ ^[a-z_][a-z0-9_-]*$ ]] || { echo "Invalid SSH user" >&2; exit 2; }
+[[ -z $nvme_device || -z $nvme_storage_device ]] || {
+    echo "Choose either root migration or /content storage, not both" >&2
+    exit 2
+}
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+if [[ -n $nvme_storage_device ]]; then
+    [[ -x $script_dir/target/uconsole-bootstrap-nvme-storage ]] || {
+        echo "Missing target helper: $script_dir/target/uconsole-bootstrap-nvme-storage" >&2
+        exit 1
+    }
+fi
 if [[ -n $shtf_deb ]]; then
     [[ -f $shtf_deb && -s $shtf_deb ]] || { echo "Invalid SHTF package: $shtf_deb" >&2; exit 2; }
     for command in ar tar awk; do
@@ -142,6 +156,19 @@ fi
 if [[ -n $shtf_deb ]]; then
     "${scp_cmd[@]}" "${ssh_opts[@]}" "$shtf_deb" "$user@$host:/tmp/uconsole-shtf-box.deb"
     sudo_remote "apt-get install -y /tmp/uconsole-shtf-box.deb && systemctl enable --now shtf-box.service && rm -f /tmp/uconsole-shtf-box.deb"
+fi
+
+if [[ -n $nvme_storage_device ]]; then
+    [[ $nvme_storage_device =~ ^/dev/nvme[0-9]+n[0-9]+$ ]] || {
+        echo "Invalid NVMe device: $nvme_storage_device" >&2
+        exit 2
+    }
+    "${scp_cmd[@]}" "${ssh_opts[@]}" \
+        "$script_dir/target/uconsole-bootstrap-nvme-storage" \
+        "$user@$host:/tmp/uconsole-bootstrap-nvme-storage"
+    sudo_remote "install -m 0755 /tmp/uconsole-bootstrap-nvme-storage /usr/local/sbin/uconsole-bootstrap-nvme-storage && rm -f /tmp/uconsole-bootstrap-nvme-storage"
+    "${remote[@]}" "test -b '$nvme_storage_device' && lsblk -dn -b -o NAME,SIZE,MODEL '$nvme_storage_device'"
+    sudo_remote "/usr/local/sbin/uconsole-bootstrap-nvme-storage --device '$nvme_storage_device' --yes"
 fi
 
 if [[ $reboot == true ]]; then

@@ -26,7 +26,7 @@ Operator host `bugoutbox` / `192.168.0.10` is explicitly out of target scope.
 | Radio/GPS tools | Meshtastic daemon/UI, SDR++, tar1090, PyGPSClient | PASS |
 | SHTF box | arm64 package installed; service enabled/active; health API HTTP 200; staging rooted at `/content` | PASS |
 | System health | No failed systemd units | PASS |
-| NVMe root | No NVMe block device or PCI endpoint; PCIe remains at receiver-detect | BLOCKED: hardware endpoint absent |
+| NVMe `/content` storage | No NVMe block device or PCI endpoint; PCIe remains at receiver-detect | BLOCKED: hardware endpoint absent |
 | RTC | PCF85063 at I2C7 `0x51` reports chip absent; no `/dev/rtc*` | BLOCKED: hardware absent |
 
 ## Repeatable operation
@@ -35,12 +35,13 @@ Use `scripts/fetch-uconsole-image.sh` for cache-aware artifact download,
 compressed/raw checksum validation, and decompression. Then use
 `scripts/deploy-uconsole.sh` for flash, post-switch boot wait, CM5 identity,
 package provisioning, optional verified arm64 SHTF package installation,
-optional NVMe migration, reboot detection by changed boot ID, and final
+optional 2 TB NVMe `/content` initialization, reboot detection by changed boot ID, and final
 validation. The physical Maskrom switch and power cycle are the only manual
 transition.
 
-Never pass `--migrate-nvme` until `/dev/nvme0n1` exists and reports the expected
-2 TB device. Migration is destructive to the explicitly named NVMe device.
+Never pass `--nvme-storage` until `/dev/nvme0n1` exists and reports the expected
+2 TB device. Initialization is destructive to the explicitly named NVMe; the
+OS remains on eMMC.
 
 ## Researched sources
 

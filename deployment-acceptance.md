@@ -29,6 +29,10 @@ Operator host `bugoutbox` / `192.168.0.10` is explicitly out of target scope.
 | NVMe `/content` storage | Samsung 990 PRO links at Gen2 and Gen1, but firmware `5B2QJXD7` hangs on Identify and 4 KiB reads under both installed kernels; no format attempted | BLOCKED: update SSD externally to Samsung `8B2QJXD7`, then rerun read-only preflight |
 | RTC | PCF85063 at I2C7 `0x51` reports chip absent; no `/dev/rtc*` | BLOCKED: hardware absent |
 
+Repeatable image run `31867820447` passed at commit `242636c`. Cached artifact
+SHA-256: raw `30e33fc4aed61161a550b0fc757a214cfb9122692671e9f6fa8d2eb06100e522`;
+XZ `24c18c14efc486ae1fdfe208a0786b80ed3af709354b92e473d7e6ffcdff19fb`.
+
 ## Repeatable operation
 
 Use `scripts/fetch-uconsole-image.sh` for cache-aware artifact download,

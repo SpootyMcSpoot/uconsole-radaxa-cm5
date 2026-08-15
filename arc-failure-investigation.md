@@ -526,7 +526,7 @@
   `900e7370677510922e1b9eadd597a0d8618b18f0172fc51468680c1b5e794124`
   and `675ba7f76f8b0f8169b6c2bc1c48b953418cf33dbd061d0bd4658136cea33d64`.
 
-### Samsung NVMe controller power-state failure
+### Samsung NVMe firmware/read failure
 
 - After attachment plus cold reboot, PCIe linked at Gen2 x1 and enumerated
   Samsung controller `144d:a80c`. The kernel created `nvme0n1` with the expected
@@ -546,3 +546,7 @@
   the failing uConsole link is unsafe.
 - Storage bootstrap now refuses this model unless sysfs reports `8B2QJXD7`,
   then performs read-only first/end-device probes before any destructive write.
+- Image run `31867820447` at commit `242636c` passed after selecting the actual
+  unexpired kernel artifact from run `31846652709`. The first dispatch used an
+  image-only run as the reuse input and failed only at artifact download; no
+  rebuild was attempted until that contract error was identified.

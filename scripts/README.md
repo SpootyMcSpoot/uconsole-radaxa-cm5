@@ -93,6 +93,12 @@ never execute locally. Built Debian image already includes HackerGadgets stack,
 XFCE/LightDM, AIO2 boot rails, SHTF storage staging, NVMe bootstrap helper, and
 hardware validator.
 
+Samsung 990 PRO 2 TB users must update SSD firmware on a stable native M.2 PC
+connection before initialization. The helper refuses firmware older than
+`8B2QJXD7` and runs read-only probes at both ends of the device before its first
+write. `smartd` stays disabled because older 990 PRO firmware can hang on NVMe
+Identify; `smartmontools` remains installed for manual diagnostics.
+
 For live kernel updates, install only `linux-image-*.deb`. CI-generated headers
 contain cross-build helper binaries and are intended for build inspection, not
 on-device DKMS compilation.

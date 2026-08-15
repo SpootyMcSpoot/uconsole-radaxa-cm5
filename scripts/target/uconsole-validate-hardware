@@ -26,6 +26,7 @@ shtf_health_ok() { curl -fsS --max-time 5 http://127.0.0.1:8080/api/v1/health | 
 systemd_ok() { [[ $(systemctl --failed --no-legend 2>/dev/null | wc -l) -eq 0 ]]; }
 boot_points_to_root() {
     local uuid
+    root_on_nvme || return 1
     uuid=$(findmnt -n -o UUID /)
     grep -Eq "(^|[[:space:]])root=UUID=$uuid([[:space:]]|$)" /boot/extlinux/extlinux.conf
 }

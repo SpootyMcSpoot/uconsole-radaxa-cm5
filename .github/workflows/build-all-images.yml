@@ -534,7 +534,7 @@ jobs:
           path: |
             ${{ env.DEBIAN_IMAGE }}
             ${{ env.DEBIAN_IMAGE }}.sha256
-            '*.img.sha256'
+            *.img.sha256
           retention-days: 30
 
   # ============================================================

@@ -490,3 +490,17 @@
   execute it through one remote `sudo /bin/bash -c` boundary. This also makes
   future compound migration/provision operations atomic with respect to
   privilege handling.
+
+### Artifact download and raw checksum publication
+
+- Final image run `31854866795` passed. First local download failed because
+  GitHub CLI staged the 1.56 GB ZIP in quota-limited `/tmp`; retrying with
+  `TMPDIR` on the staging volume completed without rebuilding or changing the
+  artifact.
+- Compressed checksum verification and `xz -t` passed. A full decompression
+  stream produced raw SHA-256
+  `804b4fe47a66fd54d7047dd72b2faaa310d3d5155260c1e50095429aea3e727c`.
+- The artifact omitted the already-generated raw sidecar because quotes in the
+  multiline upload path made the glob literal. Remove those quotes for future
+  runs. Local staging contains the derived raw sidecar for this successful
+  artifact.

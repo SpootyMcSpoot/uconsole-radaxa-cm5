@@ -10,6 +10,7 @@ Options:
   --provision          Run idempotent HackerGadgets/XFCE provisioning
   --allow-emmc         Permit provisioning before NVMe migration
   --migrate-nvme DEV   Migrate root to exact NVMe device (destructive)
+  --shtf-deb FILE      Install verified arm64 shtf-box package
   --reboot             Reboot after successful provisioning
   --identity-only      Stop after local-address and target-model checks
   --print-boot-id      Print boot ID after target-model check, then stop
@@ -26,6 +27,7 @@ user=radxa
 provision=false
 allow_emmc=false
 nvme_device=""
+shtf_deb=""
 reboot=false
 identity_only=false
 print_boot_id=false
@@ -37,6 +39,7 @@ while (($#)); do
         --provision) provision=true; shift ;;
         --allow-emmc) allow_emmc=true; shift ;;
         --migrate-nvme) nvme_device=${2:-}; shift 2 ;;
+        --shtf-deb) shtf_deb=${2:-}; shift 2 ;;
         --reboot) reboot=true; shift ;;
         --identity-only) identity_only=true; shift ;;
         --print-boot-id) print_boot_id=true; shift ;;
@@ -51,6 +54,26 @@ done
     exit 2
 }
 [[ $user =~ ^[a-z_][a-z0-9_-]*$ ]] || { echo "Invalid SSH user" >&2; exit 2; }
+if [[ -n $shtf_deb ]]; then
+    [[ -f $shtf_deb && -s $shtf_deb ]] || { echo "Invalid SHTF package: $shtf_deb" >&2; exit 2; }
+    for command in ar tar awk; do
+        command -v "$command" >/dev/null || { echo "Missing command: $command" >&2; exit 1; }
+    done
+    control_member=$(ar t "$shtf_deb" | awk '/^control[.]tar([.].+)?$/ {print; exit}')
+    [[ -n $control_member ]] || { echo "Invalid Debian package control archive" >&2; exit 2; }
+    case "$control_member" in
+        *.zst) control_data=$(ar p "$shtf_deb" "$control_member" | tar --zstd -xOf - ./control) ;;
+        *.xz) control_data=$(ar p "$shtf_deb" "$control_member" | tar -JxOf - ./control) ;;
+        *.gz) control_data=$(ar p "$shtf_deb" "$control_member" | tar -zxOf - ./control) ;;
+        *.bz2) control_data=$(ar p "$shtf_deb" "$control_member" | tar -jxOf - ./control) ;;
+        *.tar) control_data=$(ar p "$shtf_deb" "$control_member" | tar -xOf - ./control) ;;
+        *) echo "Unsupported Debian control compression: $control_member" >&2; exit 2 ;;
+    esac
+    package_name=$(awk '$1 == "Package:" {print $2; exit}' <<<"$control_data")
+    package_arch=$(awk '$1 == "Architecture:" {print $2; exit}' <<<"$control_data")
+    [[ $package_name == shtf-box ]] || { echo "Not a shtf-box package" >&2; exit 2; }
+    [[ $package_arch == arm64 ]] || { echo "SHTF package is not arm64" >&2; exit 2; }
+fi
 
 mapfile -t target_ips < <(getent ahostsv4 "$host" | awk '{print $1}' | sort -u)
 ((${#target_ips[@]} > 0)) || { echo "Cannot resolve target: $host" >&2; exit 1; }
@@ -74,6 +97,8 @@ trap 'rm -f "$known_hosts"' EXIT
 ssh_opts=(-F /dev/null -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new \
     -o UserKnownHostsFile="$known_hosts")
 remote=("${ssh_cmd[@]}" "${ssh_opts[@]}" "$user@$host")
+scp_cmd=(scp)
+[[ -z ${SSHPASS:-} ]] || scp_cmd=(sshpass -e scp)
 
 model=$("${remote[@]}" "tr -d '\\0' </proc/device-tree/model")
 [[ $model == "Radxa CM5 RPI CM4 IO" ]] || {
@@ -110,6 +135,11 @@ if [[ $provision == true ]]; then
     install_args=""
     [[ $allow_emmc == false ]] || install_args="--allow-emmc"
     sudo_remote "/usr/local/sbin/uconsole-install-hackergadgets $install_args"
+fi
+
+if [[ -n $shtf_deb ]]; then
+    "${scp_cmd[@]}" "${ssh_opts[@]}" "$shtf_deb" "$user@$host:/tmp/uconsole-shtf-box.deb"
+    sudo_remote "apt-get install -y /tmp/uconsole-shtf-box.deb && systemctl enable --now shtf-box.service && rm -f /tmp/uconsole-shtf-box.deb"
 fi
 
 if [[ $reboot == true ]]; then

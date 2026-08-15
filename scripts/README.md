@@ -43,7 +43,8 @@ SSHPASS='<ssh-password>' SUDO_PASSWORD='<sudo-password>' \
   --image radxa-cm5-uconsole_debian_bookworm.img \
   --loader rk3588_spl_loader.bin \
   --sha256 <published-raw-image-sha256> \
-  --host 192.168.0.146
+  --host 192.168.0.146 \
+  --shtf-deb /path/to/shtf-box_arm64.deb
 
 # Add only after the expected 2TB device appears as /dev/nvme0n1:
 #   --migrate-nvme /dev/nvme0n1

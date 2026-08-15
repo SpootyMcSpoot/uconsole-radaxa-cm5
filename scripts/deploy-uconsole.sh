@@ -10,6 +10,7 @@ Options:
   --user USER          SSH user (default: radxa)
   --wait-seconds N     Maximum wait after each reboot (default: 900)
   --migrate-nvme DEV   Migrate root after provisioning (destructive to DEV)
+  --shtf-deb FILE      Install verified arm64 shtf-box package
   --skip-flash         Provision/validate an already booted target
 
 Set SSHPASS and SUDO_PASSWORD for password authentication. The script flashes
@@ -26,6 +27,7 @@ host=""
 user=radxa
 wait_seconds=900
 nvme_device=""
+shtf_deb=""
 skip_flash=false
 while (($#)); do
     case "$1" in
@@ -36,6 +38,7 @@ while (($#)); do
         --user) user=${2:-}; shift 2 ;;
         --wait-seconds) wait_seconds=${2:-}; shift 2 ;;
         --migrate-nvme) nvme_device=${2:-}; shift 2 ;;
+        --shtf-deb) shtf_deb=${2:-}; shift 2 ;;
         --skip-flash) skip_flash=true; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "Unknown argument: $1" >&2; usage >&2; exit 2 ;;
@@ -90,7 +93,9 @@ if [[ $skip_flash == false ]]; then
 fi
 
 wait_for_target
-"$provision_script" --host "$host" --user "$user" --provision --allow-emmc --no-validate
+provision_args=(--host "$host" --user "$user" --provision --allow-emmc --no-validate)
+[[ -z $shtf_deb ]] || provision_args+=(--shtf-deb "$shtf_deb")
+"$provision_script" "${provision_args[@]}"
 
 if [[ -n $nvme_device ]]; then
     previous_boot_id=$("$provision_script" --host "$host" --user "$user" --print-boot-id | tail -n 1)

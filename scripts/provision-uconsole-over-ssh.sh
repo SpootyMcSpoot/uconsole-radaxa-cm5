@@ -12,6 +12,7 @@ Options:
   --migrate-nvme DEV   Migrate root to exact NVMe device (destructive)
   --reboot             Reboot after successful provisioning
   --identity-only      Stop after local-address and target-model checks
+  --print-boot-id      Print boot ID after target-model check, then stop
   --no-validate        Skip final hardware validation
 
 Set SSHPASS for password SSH and SUDO_PASSWORD for remote sudo. SSH keys and
@@ -27,6 +28,7 @@ allow_emmc=false
 nvme_device=""
 reboot=false
 identity_only=false
+print_boot_id=false
 validate=true
 while (($#)); do
     case "$1" in
@@ -37,6 +39,7 @@ while (($#)); do
         --migrate-nvme) nvme_device=${2:-}; shift 2 ;;
         --reboot) reboot=true; shift ;;
         --identity-only) identity_only=true; shift ;;
+        --print-boot-id) print_boot_id=true; shift ;;
         --no-validate) validate=false; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "Unknown argument: $1" >&2; usage >&2; exit 2 ;;
@@ -77,6 +80,10 @@ model=$("${remote[@]}" "tr -d '\\0' </proc/device-tree/model")
     echo "Refusing non-target host: $host reports '$model'" >&2
     exit 1
 }
+if [[ $print_boot_id == true ]]; then
+    "${remote[@]}" cat /proc/sys/kernel/random/boot_id
+    exit 0
+fi
 printf 'PASS target identity: %s (%s)\n' "$model" "$host"
 [[ $identity_only == false ]] || exit 0
 

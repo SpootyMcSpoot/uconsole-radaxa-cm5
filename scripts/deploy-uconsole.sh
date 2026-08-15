@@ -65,9 +65,12 @@ flash_script="$script_dir/flash-uconsole-maskrom.sh"
 provision_script="$script_dir/provision-uconsole-over-ssh.sh"
 
 wait_for_target() {
+    local previous_boot_id=${1:-}
     local deadline=$((SECONDS + wait_seconds))
+    local current_boot_id=""
     echo "Waiting for verified Radxa CM5 target at $host ..."
-    until "$provision_script" --host "$host" --user "$user" --identity-only >/dev/null 2>&1; do
+    until current_boot_id=$("$provision_script" --host "$host" --user "$user" --print-boot-id 2>/dev/null) &&
+        [[ -z $previous_boot_id || $current_boot_id != "$previous_boot_id" ]]; do
         ((SECONDS < deadline)) || { echo "Timed out waiting for verified target: $host" >&2; return 1; }
         sleep 5
     done
@@ -90,8 +93,9 @@ wait_for_target
 "$provision_script" --host "$host" --user "$user" --provision --allow-emmc --no-validate
 
 if [[ -n $nvme_device ]]; then
+    previous_boot_id=$("$provision_script" --host "$host" --user "$user" --print-boot-id | tail -n 1)
     "$provision_script" --host "$host" --user "$user" --migrate-nvme "$nvme_device" --reboot
-    wait_for_target
+    wait_for_target "$previous_boot_id"
 fi
 
 "$provision_script" --host "$host" --user "$user"

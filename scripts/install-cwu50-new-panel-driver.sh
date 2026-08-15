@@ -3,12 +3,35 @@
 set -euo pipefail
 
 KERNEL_DIR="${1:?usage: install-cwu50-new-panel-driver.sh KERNEL_DIR}"
+SUPPORT_REF="0a8656a67e2e4cc8bb1a70091f7b9e81d815176c"
+SUPPORT_SHA256="f091a5d6266e3f325fecb06fbce5bc53a5afe726949cd3adde25ef942e8ec8e8"
+SUPPORT_URL="https://github.com/ak-rex/ClockworkRadxa-linux/commit/${SUPPORT_REF}.patch"
 DRIVER_REF="5633aedcb3fd632d64c54db0184880d1954de62b"
 DRIVER_SHA256="db451e742bb60a005c126688fb8c4b0cb239ead465264d35ac88902f6a953ba3"
 DRIVER_URL="https://raw.githubusercontent.com/ak-rex/rpi-linux/${DRIVER_REF}/drivers/gpu/drm/panel/panel-cwu50.c"
 TARGET="${KERNEL_DIR}/drivers/gpu/drm/panel/panel-cwu50.c"
 TEMP_DRIVER="$(mktemp)"
-trap 'rm -f "${TEMP_DRIVER}"' EXIT
+TEMP_SUPPORT="$(mktemp)"
+trap 'rm -f "${TEMP_DRIVER}" "${TEMP_SUPPORT}"' EXIT
+
+# Radxa rkr5.1 has the CM5 device tree and newer PCIe stack, but not the
+# ClockworkPi panel/backlight drivers carried by AK-Rex. Apply that pinned
+# support commit while excluding its old AXP20x battery hunks: those do not
+# apply to rkr5.1 and are unrelated to panel, keyboard, or NVMe operation.
+if [ ! -f "${TARGET}" ]; then
+  wget -q -O "${TEMP_SUPPORT}" "${SUPPORT_URL}"
+  printf '%s  %s\n' "${SUPPORT_SHA256}" "${TEMP_SUPPORT}" | sha256sum -c -
+  git -C "${KERNEL_DIR}" apply --check \
+    --exclude='drivers/power/supply/*' "${TEMP_SUPPORT}"
+  git -C "${KERNEL_DIR}" apply \
+    --exclude='drivers/power/supply/*' "${TEMP_SUPPORT}"
+fi
+
+grep -q 'config DRM_PANEL_CWU50' "${KERNEL_DIR}/drivers/gpu/drm/panel/Kconfig"
+grep -q 'CONFIG_DRM_PANEL_CWU50' "${KERNEL_DIR}/drivers/gpu/drm/panel/Makefile"
+grep -q 'config BACKLIGHT_OCP8178' "${KERNEL_DIR}/drivers/video/backlight/Kconfig"
+grep -q 'CONFIG_BACKLIGHT_OCP8178' "${KERNEL_DIR}/drivers/video/backlight/Makefile"
+test -f "${KERNEL_DIR}/drivers/video/backlight/ocp8178_bl.c"
 
 wget -q -O "${TEMP_DRIVER}" "${DRIVER_URL}"
 printf '%s  %s\n' "${DRIVER_SHA256}" "${TEMP_DRIVER}" | sha256sum -c -

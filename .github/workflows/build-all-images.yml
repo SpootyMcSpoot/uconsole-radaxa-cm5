@@ -29,11 +29,11 @@ on:
 env:
   ARCH: arm64
   DEBIAN_FRONTEND: noninteractive
-  # June 2026 Radxa/uConsole refresh. Pin exact source for reproducibility.
-  KERNEL_BRANCH: d142501df0e913a68f71d06fc2f0cb01b6e9373e
+  # August 2026 Radxa rkr5.1 refresh. Pin exact source for reproducibility.
+  KERNEL_BRANCH: f87fca6cefcb6229c7f81399dd351cf658940bfa
   OVERLAYS_REPO: dev-null2019/radxa-cm5-uconsole
   OVERLAYS_REF: c2204834e1d7d0acfd64e1b7874d432bc142f1a4
-  KERNEL_REPO: ak-rex/ClockworkRadxa-linux
+  KERNEL_REPO: radxa/kernel
   AIOV2_CTL_REPO: hackergadgets/aiov2_ctl
   AIOV2_CTL_REF: c21ca742775b32ecea30b334e15a2d7f003e511a
   DEBIAN_IMAGE_SIZE_GIB: 12
@@ -788,8 +788,8 @@ jobs:
           # Radxa CM5 uConsole Build
 
           **Build Date:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")
-          **Kernel Version:** 6.1.x-${{ inputs.kernel_version }}
-          **Kernel Source:** ClockworkRadxa-linux (linux-6.1-stan-rkr4.1)
+          **Kernel Version:** 6.1.115-${{ inputs.kernel_version }}
+          **Kernel Source:** radxa/kernel (linux-6.1-stan-rkr5.1, pinned f87fca6cefcb)
           **Build Target:** ${BUILD_TARGET}
 
           ## Build Information

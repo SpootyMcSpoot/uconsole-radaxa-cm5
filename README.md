@@ -5,7 +5,7 @@ Automated GitHub Actions pipeline for building custom Radxa CM5 images for the C
 ## Overview
 
 This pipeline automates the complete build process:
-1. Cross-compiles Linux kernel from ClockworkRadxa-linux
+1. Cross-compiles Radxa's RK3588 Linux kernel with pinned ClockworkPi support
 2. Builds device tree overlays for uConsole hardware
 3. Injects custom kernel and overlays into base Radxa image
 4. Creates flashable `.img.xz` image ready for deployment
@@ -21,7 +21,8 @@ This pipeline automates the complete build process:
 ### Source Repositories
 
 The pipeline pulls from:
-- **Kernel**: `ak-rex/ClockworkRadxa-linux` (branch: `linux-6.1-stan-rkr4.1`)
+- **Kernel**: `radxa/kernel` (`linux-6.1-stan-rkr5.1`, pinned commit `f87fca6cefcb`)
+- **uConsole support**: pinned AK-Rex panel/backlight patch plus the newer-panel CWU50 driver
 - **Overlays**: `dev-null2019/radxa-cm5-uconsole`
 
 ## Usage
@@ -78,7 +79,7 @@ sudo ./scripts/build-image.sh debian 1
 - Installs image manipulation tools
 
 ### Stage 2: Kernel Compilation
-- Clones ClockworkRadxa-linux kernel source
+- Clones the pinned Radxa kernel source and applies pinned ClockworkPi support
 - Configures for Rockchip (RK3588S2) architecture
 - Cross-compiles kernel, modules, and device trees
 - Packages as Debian .deb files

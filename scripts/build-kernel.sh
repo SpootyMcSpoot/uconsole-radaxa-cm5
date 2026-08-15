@@ -5,8 +5,8 @@
 # Usage: ./build-kernel.sh <kernel_version>
 #
 # Environment variables:
-#   KERNEL_REPO: Git repository URL (default: ak-rex/ClockworkRadxa-linux)
-#   KERNEL_BRANCH: Git branch (default: linux-6.1-stan-rkr4.1)
+#   KERNEL_REPO: Git repository URL (default: radxa/kernel)
+#   KERNEL_BRANCH: Git ref (default: pinned linux-6.1-stan-rkr5.1 commit)
 #   OVERLAYS_REPO: Overlays repository (default: dev-null2019/radxa-cm5-uconsole)
 #   ARCH: Target architecture (default: arm64)
 #   CROSS_COMPILE: Cross-compiler prefix (default: aarch64-none-linux-gnu-)
@@ -16,8 +16,8 @@ set -u  # Exit on undefined variable
 
 # Configuration
 KERNEL_VERSION="${1:-1}"
-KERNEL_REPO="${KERNEL_REPO:-https://github.com/ak-rex/ClockworkRadxa-linux.git}"
-KERNEL_BRANCH="${KERNEL_BRANCH:-linux-6.1-stan-rkr4.1}"
+KERNEL_REPO="${KERNEL_REPO:-https://github.com/radxa/kernel.git}"
+KERNEL_BRANCH="${KERNEL_BRANCH:-f87fca6cefcb6229c7f81399dd351cf658940bfa}"
 OVERLAYS_REPO="${OVERLAYS_REPO:-https://github.com/dev-null2019/radxa-cm5-uconsole.git}"
 ARCH="${ARCH:-arm64}"
 CROSS_COMPILE="${CROSS_COMPILE:-aarch64-none-linux-gnu-}"

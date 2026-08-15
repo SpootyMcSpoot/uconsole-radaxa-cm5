@@ -16,8 +16,8 @@ set -e  # Exit on error
 set -u  # Exit on undefined variable
 
 # Configuration
-KERNEL_REPO="https://github.com/ak-rex/ClockworkRadxa-linux.git"
-KERNEL_BRANCH="linux-6.1-stan-rkr4.1"
+KERNEL_REPO="https://github.com/radxa/kernel.git"
+KERNEL_BRANCH="f87fca6cefcb6229c7f81399dd351cf658940bfa"
 OVERLAYS_REPO="https://github.com/dev-null2019/radxa-cm5-uconsole.git"
 WORK_DIR="/tmp/uconsole-build-$$"
 USE_DOCKER=true

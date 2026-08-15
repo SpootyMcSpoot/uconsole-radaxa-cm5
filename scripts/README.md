@@ -149,8 +149,8 @@ sudo ./scripts/build-image.sh debian 1 "https://example.com/custom-image.img.xz"
 
 ### build-kernel.sh
 
-- `KERNEL_REPO`: Git repository URL (default: `ak-rex/ClockworkRadxa-linux`)
-- `KERNEL_BRANCH`: Git branch (default: `linux-6.1-stan-rkr4.1`)
+- `KERNEL_REPO`: Git repository URL (default: `radxa/kernel`)
+- `KERNEL_BRANCH`: Git ref (default: pinned `linux-6.1-stan-rkr5.1` commit)
 - `OVERLAYS_REPO`: Overlays repository (default: `dev-null2019/radxa-cm5-uconsole`)
 - `ARCH`: Target architecture (default: `arm64`)
 - `CROSS_COMPILE`: Cross-compiler prefix (default: `aarch64-none-linux-gnu-`)

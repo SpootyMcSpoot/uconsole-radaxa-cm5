@@ -550,3 +550,37 @@
   unexpired kernel artifact from run `31846652709`. The first dispatch used an
   image-only run as the reuse input and failed only at artifact download; no
   rebuild was attempted until that contract error was identified.
+
+### Radxa rkr5.1 NVMe discriminator
+
+- Radxa's `linux-6.1-stan-rkr5.1` at exact commit
+  `f87fca6cefcb6229c7f81399dd351cf658940bfa` provides Linux 6.1.115, the exact
+  same CM5 RPI-CM4-IO device tree, and a newer Rockchip DesignWare PCIe driver.
+  The build automation now applies pinned AK-Rex panel/backlight support while
+  excluding obsolete AXP20x hunks, then installs the already-vetted newer-panel
+  CWU50 driver.
+- Kernel-only CI run `31871935060` passed at automation commit `8e49015`.
+  Package SHA-256 is
+  `e2d7b35bb09a76c1e1b90d3ef176580969536679ff2c0c88087eb56b35c8c8f9`.
+  Package preflight proved arm64 architecture, exact CM5 DTB, built-in Rockchip
+  PCIe/NVMe, CWU50/OCP8178 modules, MT7921U, and MediaTek Bluetooth.
+- Live installation retained 6.1.84 and 6.1.43 as recovery entries. The new
+  kernel booted from eMMC with the complete overlay stack, connected DSI
+  720x1280, active LightDM and SHTF, AIO2 rails, and zero failed systemd units.
+- NVMe reproduced the identical failure: Gen2 x1 link at 6.46 seconds,
+  namespace and partition present, then at 37.13 seconds a 4 KiB read at LBA
+  3,907,028,992 caused `CSTS=0xffffffff`, `PCI_STATUS=0x11`, capacity zero, and
+  controller removal. Adding the full kernel-recommended set
+  `nvme_core.default_ps_max_latency_us=0 pcie_aspm=off pcie_port_pm=off` did not
+  change timing or outcome. Omitting the AIO2 rail overlay also did not change
+  the failure.
+- This rules out the old Rockchip PCIe stack, ASPM/APST/port-PM policy, link
+  generation, and AIO2 USB/SDR load. Leading causes are the SSD's old firmware
+  and NVMe-rail power/signal margin. Updating firmware over this failing link
+  remains unsafe. External update to Samsung `8B2QJXD7`, or substitution of a
+  confirmed low-power SSD such as the forum-tested 1 TB SN740 2230, is the next
+  hardware discriminator.
+- Production validator result on the final boot: 29 PASS, three expected
+  blockers (NVMe device, NVMe `/content`, RTC). The destructive storage helper
+  rejected absent `/dev/nvme0n1`; `/etc/fstab` retained zero NVMe entries and
+  `/content` remained an eMMC directory.

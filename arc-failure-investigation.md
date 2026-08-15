@@ -476,3 +476,17 @@
 - Minimal correction: write the unambiguous shell assignment and source the
   file in the target chroot to assert the resulting variable value. This
   checks behavior instead of quote formatting.
+
+### Remote SHTF install privilege gate
+
+- Live automation identified the exact CM5 and verified the arm64 `shtf-box`
+  package. `apt-get` reported the expected installed version, then the chained
+  `systemctl enable --now` failed with `Interactive authentication required`.
+- Package validity, SSH identity, sudo password, and APT are ruled out by the
+  successful preceding operations. The command-construction hypothesis is
+  confirmed: shell `&&` operators were outside `sudo`, so only the first
+  command inherited root.
+- Minimal correction: shell-escape the complete trusted command string and
+  execute it through one remote `sudo /bin/bash -c` boundary. This also makes
+  future compound migration/provision operations atomic with respect to
+  privilege handling.

@@ -114,10 +114,12 @@ printf 'PASS target identity: %s (%s)\n' "$model" "$host"
 
 sudo_remote() {
     local command=$1
+    local quoted_command
+    printf -v quoted_command '%q' "$command"
     if [[ -n ${SUDO_PASSWORD:-} ]]; then
-        printf '%s\n' "$SUDO_PASSWORD" | "${remote[@]}" "sudo -S -p '' $command"
+        printf '%s\n' "$SUDO_PASSWORD" | "${remote[@]}" "sudo -S -p '' /bin/bash -c $quoted_command"
     else
-        "${remote[@]}" "sudo -n $command"
+        "${remote[@]}" "sudo -n /bin/bash -c $quoted_command"
     fi
 }
 

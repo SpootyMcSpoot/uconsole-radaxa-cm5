@@ -367,20 +367,6 @@ jobs:
             apt-get install -y --install-recommends --no-upgrade \
               hackergadgets-uconsole-aio-board meshtastic-mui sdrpp-brown \
               tar1090 pygpsclient
-            # --add-apps installs its own all-off defaults. Apply the CM5/AIO2
-            # boot policy afterwards so SDR and the AC USB expansion rail are
-            # live on every boot.
-            cat >/usr/local/share/aiov2_ctl/config.json <<'AIO2_EOF'
-          {
-            "rails_on_boot": {
-              "GPS": false,
-              "LORA": false,
-              "SDR": true,
-              "USB": true
-            },
-            "mesh_on_boot": false
-          }
-          AIO2_EOF
             # OCP8178 owns backlight on Radxa; the package's Raspberry Pi GPIO9
             # unit is incompatible. NVMe-oF autoconnect is unrelated to the
             # local PCIe NVMe root and fails when nvme-fabrics is unavailable.
@@ -420,6 +406,21 @@ jobs:
             sudo mv ./mnt/root/etc/resolv.conf.image-build ./mnt/root/etc/resolv.conf
           fi
 
+          # Package/controller actions may normalize their boot defaults.
+          # Apply hardware policy last, outside the chroot, so no later target
+          # maintainer script can replace it before publication.
+          cat <<'AIO2_EOF' | sudo tee ./mnt/root/usr/local/share/aiov2_ctl/config.json >/dev/null
+          {
+            "rails_on_boot": {
+              "GPS": false,
+              "LORA": false,
+              "SDR": true,
+              "USB": true
+            },
+            "mesh_on_boot": false
+          }
+          AIO2_EOF
+
           # PyGPSClient's upstream installer creates only a per-user venv and
           # appends it to the interactive shell PATH. Provide the system-wide
           # command advertised by the HackerGadgets package without executing
@@ -457,8 +458,7 @@ jobs:
           test "$(sudo readlink ./mnt/root/usr/local/bin/pygpsclient)" = "$PYGPSCLIENT_VENV"
           sudo test -x "$PYGPSCLIENT_IMAGE_PATH"
           sudo test -s ./mnt/root/usr/local/share/aiov2_ctl/config.json
-          sudo grep -q '"SDR": true' ./mnt/root/usr/local/share/aiov2_ctl/config.json
-          sudo grep -q '"USB": true' ./mnt/root/usr/local/share/aiov2_ctl/config.json
+          sudo python3 -c 'import json; c=json.load(open("./mnt/root/usr/local/share/aiov2_ctl/config.json")); assert c["rails_on_boot"]["SDR"] is True; assert c["rails_on_boot"]["USB"] is True; assert c["mesh_on_boot"] is False'
           sudo test -s ./mnt/root/etc/systemd/system/aiov2-rails-boot.service
           sudo test -L ./mnt/root/etc/systemd/system/multi-user.target.wants/aiov2-rails-boot.service
           sudo test ! -e ./mnt/root/etc/systemd/system/multi-user.target.wants/backlight.service

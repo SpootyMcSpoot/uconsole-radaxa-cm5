@@ -444,3 +444,19 @@
   `533f42f0d9ae2e268bf951d323a60f703a4ea2bb05abf3856f3133fbbe128fde`.
   Current boot has zero DSI busy/errors, active LightDM/Xorg DSI scanout,
   healthy SHTF/AIO2 services, and no failed units.
+
+### Final image AIO2 static policy gate
+
+- Run `31852201220` reused the passed kernel and installed every base, desktop,
+  HackerGadgets, Meshtastic, SDR, GPS, and container package. It retained
+  6,148,304 KiB free, then failed only the textual `"SDR": true` grep against
+  an existing non-empty AIO2 configuration file.
+- Contract/package/space hypotheses are ruled out by preceding package and free
+  space gates. Remaining hypotheses: a late package/controller action
+  normalized or replaced the configuration, or semantically valid JSON used
+  different whitespace. The failed runner was already cleaned, so exact file
+  contents were unavailable after failure.
+- Minimal correction: apply CM5 rail policy as the final offline-image write,
+  after every target maintainer/systemctl action, then parse JSON and assert
+  boolean values rather than depending on serialization whitespace. Live
+  provisioner now applies the same final policy.

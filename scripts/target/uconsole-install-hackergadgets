@@ -33,6 +33,19 @@ apt-get install -y --install-recommends \
     x11-xserver-utils dbus-x11 lightdm lightdm-gtk-greeter xfce4 \
     xfce4-goodies network-manager-gnome policykit-1 accountsservice
 
+install -d -m 0755 /usr/local/share/aiov2_ctl
+cat >/usr/local/share/aiov2_ctl/config.json <<'AIO2_EOF'
+{
+  "rails_on_boot": {
+    "GPS": false,
+    "LORA": false,
+    "SDR": true,
+    "USB": true
+  },
+  "mesh_on_boot": false
+}
+AIO2_EOF
+
 install -d -m 0755 \
     /content/packages /content/zim /content/audio /content/comics \
     /content/data /content/cache /content/models /content/maps /content/backups \
@@ -55,6 +68,7 @@ modprobe nvme || true
 modprobe mt7921u || true
 modprobe btusb || true
 systemctl enable --now gpsd.socket 2>/dev/null || true
+systemctl enable aiov2-rails-boot.service
 systemctl enable lightdm
 systemctl set-default graphical.target
 systemctl restart lightdm

@@ -520,3 +520,8 @@
   existing mounts, and explicit `--yes`. It formats only that disk, copies
   existing `/content`, retains an eMMC backup, mounts by UUID with `nofail`,
   validates SHTF health, and rolls back fstab/content placement on failure.
+- Image run `31864273128` passed all package/static gates and published the
+  eMMC-root/NVMe-content helper plus updated validator. Compressed and raw
+  artifacts independently verified as SHA-256
+  `900e7370677510922e1b9eadd597a0d8618b18f0172fc51468680c1b5e794124`
+  and `675ba7f76f8b0f8169b6c2bc1c48b953418cf33dbd061d0bd4658136cea33d64`.

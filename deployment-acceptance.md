@@ -8,9 +8,9 @@ Operator host `bugoutbox` / `192.168.0.10` is explicitly out of target scope.
 - Kernel CI: [run 31846652709](https://github.com/SpootyMcSpoot/uconsole-radaxa-cm5/actions/runs/31846652709), passed.
 - Kernel image SHA-256: `a752fef71aab9eab5b5778b316a14f1776d9f9d10899b09335a04bcf903859c7`.
 - Installed panel module SHA-256: `533f42f0d9ae2e268bf951d323a60f703a4ea2bb05abf3856f3133fbbe128fde`.
-- Final Debian CI: [run 31854866795](https://github.com/SpootyMcSpoot/uconsole-radaxa-cm5/actions/runs/31854866795), passed.
-- Compressed image SHA-256: `37f36522bc4c4874901ab7ebd1e24d04204e61aa1f87482fc09b72938cd80d14`.
-- Raw image SHA-256: `804b4fe47a66fd54d7047dd72b2faaa310d3d5155260c1e50095429aea3e727c`.
+- Final Debian CI: [run 31864273128](https://github.com/SpootyMcSpoot/uconsole-radaxa-cm5/actions/runs/31864273128), passed.
+- Compressed image SHA-256: `900e7370677510922e1b9eadd597a0d8618b18f0172fc51468680c1b5e794124`.
+- Raw image SHA-256: `675ba7f76f8b0f8169b6c2bc1c48b953418cf33dbd061d0bd4658136cea33d64`.
 
 ## Acceptance matrix
 

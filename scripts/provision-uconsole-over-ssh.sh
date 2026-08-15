@@ -11,6 +11,8 @@ Options:
   --allow-emmc         Permit provisioning before NVMe migration
   --migrate-nvme DEV   Migrate root to exact NVMe device (destructive)
   --reboot             Reboot after successful provisioning
+  --identity-only      Stop after local-address and target-model checks
+  --no-validate        Skip final hardware validation
 
 Set SSHPASS for password SSH and SUDO_PASSWORD for remote sudo. SSH keys and
 passwordless sudo also work. Script rejects loopback and every local host IP,
@@ -24,6 +26,8 @@ provision=false
 allow_emmc=false
 nvme_device=""
 reboot=false
+identity_only=false
+validate=true
 while (($#)); do
     case "$1" in
         --host) host=${2:-}; shift 2 ;;
@@ -32,6 +36,8 @@ while (($#)); do
         --allow-emmc) allow_emmc=true; shift ;;
         --migrate-nvme) nvme_device=${2:-}; shift 2 ;;
         --reboot) reboot=true; shift ;;
+        --identity-only) identity_only=true; shift ;;
+        --no-validate) validate=false; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "Unknown argument: $1" >&2; usage >&2; exit 2 ;;
     esac
@@ -72,6 +78,7 @@ model=$("${remote[@]}" "tr -d '\\0' </proc/device-tree/model")
     exit 1
 }
 printf 'PASS target identity: %s (%s)\n' "$model" "$host"
+[[ $identity_only == false ]] || exit 0
 
 sudo_remote() {
     local command=$1
@@ -104,4 +111,4 @@ if [[ $reboot == true ]]; then
     exit 0
 fi
 
-sudo_remote /usr/local/sbin/uconsole-validate-hardware
+[[ $validate == false ]] || sudo_remote /usr/local/sbin/uconsole-validate-hardware

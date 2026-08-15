@@ -372,7 +372,7 @@ jobs:
             # local PCIe NVMe root and fails when nvme-fabrics is unavailable.
             systemctl disable backlight.service nvmf-autoconnect.service 2>/dev/null || true
             sed -i '/^[[:space:]]*smartd_opts=/d' /etc/default/smartmontools
-            echo 'smartd_opts="--quit=never"' >>/etc/default/smartmontools
+            echo 'smartd_opts=--quit=never' >>/etc/default/smartmontools
             systemctl enable ssh
             systemctl enable lightdm
             systemctl set-default graphical.target
@@ -463,7 +463,7 @@ jobs:
           sudo test -L ./mnt/root/etc/systemd/system/multi-user.target.wants/aiov2-rails-boot.service
           sudo test ! -e ./mnt/root/etc/systemd/system/multi-user.target.wants/backlight.service
           sudo test ! -e ./mnt/root/etc/systemd/system/default.target.wants/nvmf-autoconnect.service
-          sudo grep -qx 'smartd_opts="--quit=never"' ./mnt/root/etc/default/smartmontools
+          sudo chroot ./mnt/root /bin/bash -c '. /etc/default/smartmontools && test "$smartd_opts" = --quit=never'
           sudo test -s ./mnt/root/usr/share/keyrings/ak-rex.gpg
           sudo test -d ./mnt/root/lib/firmware/mediatek
           sudo test -d ./mnt/root/content/packages

@@ -460,3 +460,19 @@
   after every target maintainer/systemctl action, then parse JSON and assert
   boolean values rather than depending on serialization whitespace. Live
   provisioner now applies the same final policy.
+
+### Final image smartd static policy gate
+
+- Corrected run `31853579564` passed all package assertions and retained
+  6,148,308 KiB free. It then failed only an exact textual grep for
+  `smartd_opts="--quit=never"`.
+- Package, storage-capacity, and AIO2-policy hypotheses are ruled out by the
+  immediately preceding gates. Hardware is irrelevant because this is an
+  offline image assertion.
+- The chroot command is embedded in an outer double-quoted shell string, so
+  its inner double quotes are consumed during host-shell construction. The
+  resulting valid assignment is `smartd_opts=--quit=never`; requiring one
+  serialization was the defective gate.
+- Minimal correction: write the unambiguous shell assignment and source the
+  file in the target chroot to assert the resulting variable value. This
+  checks behavior instead of quote formatting.

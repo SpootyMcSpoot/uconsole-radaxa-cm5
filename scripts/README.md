@@ -33,6 +33,22 @@ sudo apt-get install wget xz-utils kmod cpio rsync dosfstools parted \
 
 ### End-to-end repeatable deployment
 
+One command drives flash, post-reboot provisioning, optional NVMe migration,
+and validation. It waits automatically; only turning the physical Maskrom
+switch off and power-cycling after flash cannot be automated:
+
+```bash
+SSHPASS='<ssh-password>' SUDO_PASSWORD='<sudo-password>' \
+  scripts/deploy-uconsole.sh \
+  --image radxa-cm5-uconsole_debian_bookworm.img \
+  --loader rk3588_spl_loader.bin \
+  --sha256 <published-raw-image-sha256> \
+  --host 192.168.0.146
+
+# Add only after the expected 2TB device appears as /dev/nvme0n1:
+#   --migrate-nvme /dev/nvme0n1
+```
+
 Build/download raw Debian image, then flash one CM5 connected in Maskrom mode:
 
 ```bash

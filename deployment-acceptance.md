@@ -31,7 +31,9 @@ Operator host `bugoutbox` / `192.168.0.10` is explicitly out of target scope.
 
 ## Repeatable operation
 
-Use `scripts/deploy-uconsole.sh` for flash, post-switch boot wait, CM5 identity,
+Use `scripts/fetch-uconsole-image.sh` for cache-aware artifact download,
+compressed/raw checksum validation, and decompression. Then use
+`scripts/deploy-uconsole.sh` for flash, post-switch boot wait, CM5 identity,
 package provisioning, optional verified arm64 SHTF package installation,
 optional NVMe migration, reboot detection by changed boot ID, and final
 validation. The physical Maskrom switch and power cycle are the only manual

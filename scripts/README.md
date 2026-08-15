@@ -33,6 +33,13 @@ sudo apt-get install wget xz-utils kmod cpio rsync dosfstools parted \
 
 ### End-to-end repeatable deployment
 
+Fetch and cache a passed CI image. Repeated calls reuse verified local bytes:
+
+```bash
+scripts/fetch-uconsole-image.sh --run-id 31854866795 \
+  --output-dir /var/home/pestilence/uconsole-staging/run-31854866795
+```
+
 One command drives flash, post-reboot provisioning, optional NVMe migration,
 and validation. It waits automatically; only turning the physical Maskrom
 switch off and power-cycling after flash cannot be automated:

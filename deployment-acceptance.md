@@ -26,7 +26,7 @@ Operator host `bugoutbox` / `192.168.0.10` is explicitly out of target scope.
 | Radio/GPS tools | Meshtastic daemon/UI, SDR++, tar1090, PyGPSClient | PASS |
 | SHTF box | arm64 package installed; service enabled/active; health API HTTP 200; staging rooted at `/content` | PASS |
 | System health | No failed systemd units | PASS |
-| NVMe `/content` storage | No NVMe block device or PCI endpoint; PCIe remains at receiver-detect | BLOCKED: hardware endpoint absent |
+| NVMe `/content` storage | Samsung 990 PRO links at Gen2 and Gen1, but firmware `5B2QJXD7` hangs on Identify and 4 KiB reads under both installed kernels; no format attempted | BLOCKED: update SSD externally to Samsung `8B2QJXD7`, then rerun read-only preflight |
 | RTC | PCF85063 at I2C7 `0x51` reports chip absent; no `/dev/rtc*` | BLOCKED: hardware absent |
 
 ## Repeatable operation
@@ -50,3 +50,5 @@ OS remains on eMMC.
 - [AK-Rex ClockworkRadxa Linux](https://github.com/ak-rex/ClockworkRadxa-linux)
 - [HackerGadgets AIO2 controller](https://github.com/hackergadgets/aiov2_ctl)
 - [Radxa CM5 download documentation](https://docs.radxa.com/en/compute-module/cm5/download)
+- [Samsung 990 PRO firmware downloads and release notes](https://semiconductor.samsung.com/consumer-storage/support/tools/)
+- [Samsung 990 PRO data sheet](https://download.semiconductor.samsung.com/resources/data-sheet/samsung_nvme_ssd_990_pro_datasheet_rev.2.0.pdf)

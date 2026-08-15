@@ -525,3 +525,24 @@
   artifacts independently verified as SHA-256
   `900e7370677510922e1b9eadd597a0d8618b18f0172fc51468680c1b5e794124`
   and `675ba7f76f8b0f8169b6c2bc1c48b953418cf33dbd061d0bd4658136cea33d64`.
+
+### Samsung NVMe controller power-state failure
+
+- After attachment plus cold reboot, PCIe linked at Gen2 x1 and enumerated
+  Samsung controller `144d:a80c`. The kernel created `nvme0n1` with the expected
+  3,907,029,168 sectors, then at 41 seconds reported `CSTS=0xffffffff`, an I/O
+  error, capacity change to zero, and removed the controller.
+- This rules out device-tree enablement, missing NVMe driver, and initial link
+  training. It does not rule out adapter power or signal integrity: Samsung
+  specifies up to 6.1 W average read power for this 2 TB model.
+- `nvme_core.default_ps_max_latency_us=0 pcie_aspm=off`, forced PCIe Gen1, and
+  fallback kernel `6.1.43-15-rk2312` each reproduced `CSTS=0xffffffff`.
+  A controlled 4 KiB block read and `nvme id-ctrl` both hung before controller
+  removal. `smartd` reproduced the Identify hang, so it remains disabled.
+- Controller sysfs identified firmware `5B2QJXD7`. Samsung's current firmware
+  is `8B2QJXD7`; release notes explicitly cite improved read stability, while
+  `7B2QJXD7` addressed intermittent non-recognition. Firmware must be updated
+  on a stable PC/native M.2 link before retrying this adapter. Updating across
+  the failing uConsole link is unsafe.
+- Storage bootstrap now refuses this model unless sysfs reports `8B2QJXD7`,
+  then performs read-only first/end-device probes before any destructive write.

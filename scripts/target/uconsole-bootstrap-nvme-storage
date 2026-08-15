@@ -21,12 +21,19 @@ done
 model=$(tr -d '\0' </proc/device-tree/model 2>/dev/null || true)
 [[ $model == "Radxa CM5 RPI CM4 IO" ]] || { echo "Refusing target model: $model" >&2; exit 1; }
 $confirmed || { echo "Refusing destructive NVMe initialization without --yes" >&2; exit 2; }
+if ! {
+    grep -Eq '(^|[[:space:]])nvme_core[.]default_ps_max_latency_us=0([[:space:]]|$)' /proc/cmdline &&
+        grep -Eq '(^|[[:space:]])pcie_aspm=off([[:space:]]|$)' /proc/cmdline
+}; then
+    echo "Refusing: NVMe compatibility boot arguments are not active" >&2
+    exit 1
+fi
 [[ $device =~ ^/dev/nvme[0-9]+n[0-9]+$ && -b $device ]] || {
     echo "Refusing invalid NVMe block device: $device" >&2
     exit 1
 }
 
-for command in blockdev findmnt lsblk blkid sgdisk wipefs mkfs.ext4 rsync \
+for command in blockdev dd findmnt lsblk blkid sgdisk wipefs mkfs.ext4 rsync \
     udevadm partprobe mount mountpoint umount systemctl curl; do
     command -v "$command" >/dev/null || { echo "Missing required command: $command" >&2; exit 1; }
 done
@@ -38,6 +45,19 @@ device_size=$(blockdev --getsize64 "$device")
     echo "Refusing: expected 2 TB NVMe, got $device_size bytes" >&2
     exit 1
 }
+controller=${device#/dev/}
+controller=${controller%n*}
+nvme_model=$(tr -d '[:space:]' <"/sys/class/nvme/$controller/model" 2>/dev/null || true)
+nvme_firmware=$(tr -d '[:space:]' <"/sys/class/nvme/$controller/firmware_rev" 2>/dev/null || true)
+if [[ $nvme_model == SamsungSSD990PRO2TB && $nvme_firmware != 8B2QJXD7 ]]; then
+    echo "Refusing Samsung 990 PRO firmware $nvme_firmware; update to 8B2QJXD7 first" >&2
+    echo "Official update: https://semiconductor.samsung.com/consumer-storage/support/tools/" >&2
+    exit 1
+fi
+# Prove ordinary reads work at both ends before any partition-table write.
+dd if="$device" of=/dev/null bs=4096 count=1 iflag=direct status=none
+last_block=$((device_size / 4096 - 1))
+dd if="$device" of=/dev/null bs=4096 skip="$last_block" count=1 iflag=direct status=none
 content_source=$(findmnt -n -o SOURCE /content 2>/dev/null || true)
 if [[ $content_source == "$device"* ]]; then
     echo "PASS NVMe already mounted at /content: $content_source"

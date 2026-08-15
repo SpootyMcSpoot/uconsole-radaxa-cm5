@@ -373,8 +373,9 @@ jobs:
             # unit is incompatible. NVMe-oF autoconnect is unrelated to the
             # local PCIe NVMe root and fails when nvme-fabrics is unavailable.
             systemctl disable backlight.service nvmf-autoconnect.service 2>/dev/null || true
-            sed -i '/^[[:space:]]*smartd_opts=/d' /etc/default/smartmontools
-            echo 'smartd_opts=--quit=never' >>/etc/default/smartmontools
+            # eMMC has no SMART support. Samsung 990 PRO firmware before
+            # 8B2QJXD7 can hang on Identify, so never scan removable NVMe at boot.
+            systemctl disable smartmontools.service 2>/dev/null || true
             systemctl enable ssh
             systemctl enable lightdm
             systemctl set-default graphical.target
@@ -411,6 +412,9 @@ jobs:
           # Package/controller actions may normalize their boot defaults.
           # Apply hardware policy last, outside the chroot, so no later target
           # maintainer script can replace it before publication.
+          sudo sed -E -i \
+            '/^[[:space:]]*append / { /nvme_core[.]default_ps_max_latency_us=0/! s/$/ nvme_core.default_ps_max_latency_us=0 pcie_aspm=off/; }' \
+            ./mnt/root/boot/extlinux/extlinux.conf
           cat <<'AIO2_EOF' | sudo tee ./mnt/root/usr/local/share/aiov2_ctl/config.json >/dev/null
           {
             "rails_on_boot": {
@@ -466,7 +470,8 @@ jobs:
           sudo test -L ./mnt/root/etc/systemd/system/multi-user.target.wants/aiov2-rails-boot.service
           sudo test ! -e ./mnt/root/etc/systemd/system/multi-user.target.wants/backlight.service
           sudo test ! -e ./mnt/root/etc/systemd/system/default.target.wants/nvmf-autoconnect.service
-          sudo chroot ./mnt/root /bin/bash -c '. /etc/default/smartmontools && test "$smartd_opts" = --quit=never'
+          sudo test ! -e ./mnt/root/etc/systemd/system/multi-user.target.wants/smartmontools.service
+          sudo test ! -e ./mnt/root/etc/systemd/system/smartd.service
           sudo test -s ./mnt/root/usr/share/keyrings/ak-rex.gpg
           sudo test -d ./mnt/root/lib/firmware/mediatek
           sudo test -d ./mnt/root/content/packages
@@ -495,6 +500,10 @@ jobs:
             ./mnt/root/boot/extlinux/extlinux.conf
           sudo grep -Eq '^[[:space:]]*fdtdir /usr/lib/linux-image-' \
             ./mnt/root/boot/extlinux/extlinux.conf
+          APPEND_COUNT=$(sudo grep -Ec '^[[:space:]]*append ' ./mnt/root/boot/extlinux/extlinux.conf)
+          NVME_COMPAT_COUNT=$(sudo grep -Ec '^[[:space:]]*append .*nvme_core[.]default_ps_max_latency_us=0 .*pcie_aspm=off([[:space:]]|$)' ./mnt/root/boot/extlinux/extlinux.conf)
+          test "$APPEND_COUNT" -gt 0
+          test "$NVME_COMPAT_COUNT" -eq "$APPEND_COUNT"
           for overlay in axp20x.dtbo cwu50_panel.dtbo displaystuff.dtbo aio2_radxa_rails.dtbo; do
             sudo test -s "./mnt/root/boot/dtbo/$overlay"
             sudo awk -v path="/boot/dtbo/$overlay" \

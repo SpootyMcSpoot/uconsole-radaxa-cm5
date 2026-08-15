@@ -11,7 +11,7 @@ fi
 [[ $EUID -eq 0 ]] || { echo "Must run as root" >&2; exit 1; }
 [[ $(uname -m) == aarch64 ]] || { echo "Refusing: target is not aarch64" >&2; exit 1; }
 model=$(tr -d '\0' </proc/device-tree/model 2>/dev/null || true)
-grep -Eqi 'radxa.*cm5|rk3588s' <<<"$model" || { echo "Refusing: not Radxa CM5 ($model)" >&2; exit 1; }
+[[ $model == "Radxa CM5 RPI CM4 IO" ]] || { echo "Refusing target model: $model" >&2; exit 1; }
 root_source=$(findmnt -n -o SOURCE /)
 [[ $root_source == /dev/nvme* || $allow_emmc == true ]] || {
     echo "Refusing large package install before NVMe is active as root (current: $root_source)" >&2
@@ -68,6 +68,9 @@ modprobe nvme || true
 modprobe mt7921u || true
 modprobe btusb || true
 systemctl enable --now gpsd.socket 2>/dev/null || true
+# No supported fixed disk needs smartd. Some Samsung 990 PRO firmware hangs on
+# NVMe Identify, delaying boot and removing the controller from PCIe.
+systemctl disable --now smartmontools.service 2>/dev/null || true
 systemctl enable aiov2-rails-boot.service
 systemctl enable lightdm
 systemctl set-default graphical.target

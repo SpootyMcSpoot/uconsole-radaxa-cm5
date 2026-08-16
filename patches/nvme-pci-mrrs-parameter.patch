@@ -1,0 +1,30 @@
+diff --git a/drivers/nvme/host/pci.c b/drivers/nvme/host/pci.c
+--- a/drivers/nvme/host/pci.c
++++ b/drivers/nvme/host/pci.c
+@@ -103,6 +103,11 @@ static unsigned int poll_queues;
+ static bool noacpi;
+ module_param(noacpi, bool, 0444);
+ MODULE_PARM_DESC(noacpi, "disable acpi bios quirks");
++
++static unsigned int mrrs;
++module_param(mrrs, uint, 0444);
++MODULE_PARM_DESC(mrrs,
++	"override PCIe maximum read request size in bytes");
+ 
+ struct nvme_dev;
+ struct nvme_queue;
+@@ -2581,6 +2586,14 @@ static int nvme_pci_enable(struct nvme_dev *dev)
+ 	if (pci_enable_device_mem(pdev))
+ 		return result;
+ 
++	if (mrrs) {
++		result = pcie_set_readrq(pdev, mrrs);
++		if (result)
++			goto disable;
++		dev_info(dev->ctrl.device, "PCIe MRRS limited to %d bytes\n",
++			 pcie_get_readrq(pdev));
++	}
++
+ 	pci_set_master(pdev);
+ 
+ 	if (dev->ctrl.quirks & NVME_QUIRK_DMA_ADDRESS_BITS_48)

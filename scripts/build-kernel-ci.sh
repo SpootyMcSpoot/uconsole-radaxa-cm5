@@ -18,6 +18,8 @@ OUTPUT_DIR="build/output"
 
 echo "Building kernel..."
 ./scripts/install-cwu50-new-panel-driver.sh "${KERNEL_DIR}"
+git -C "${KERNEL_DIR}" apply --check ../../patches/nvme-pci-mrrs-parameter.patch
+git -C "${KERNEL_DIR}" apply ../../patches/nvme-pci-mrrs-parameter.patch
 cd "${KERNEL_DIR}"
 make rockchip_linux_defconfig
 
@@ -52,6 +54,7 @@ done
 grep -q 'cwu50_init_sequence2' drivers/gpu/drm/panel/panel-cwu50.c
 grep -q 'is_new_panel' drivers/gpu/drm/panel/panel-cwu50.c
 grep -q 'GPIO panel ID is authoritative on RK3588' drivers/gpu/drm/panel/panel-cwu50.c
+grep -q 'PCIe MRRS limited to %d bytes' drivers/nvme/host/pci.c
 make -j"$(nproc)" Image modules dtbs
 
 echo "Building kernel packages..."

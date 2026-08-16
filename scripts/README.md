@@ -103,6 +103,11 @@ For live kernel updates, install only `linux-image-*.deb`. CI-generated headers
 contain cross-build helper binaries and are intended for build inspection, not
 on-device DKMS compilation.
 
+Kernel builds expose opt-in `nvme.mrrs=<bytes>` for controlled PCIe diagnostics.
+It defaults to zero and does not alter normal behavior. A live Samsung 990 PRO
+test confirmed `nvme.mrrs=128` in sysfs and PCI config, but the controller still
+dropped on the same backup-GPT read; do not persist this parameter as a fix.
+
 ### 1. Build Kernel
 
 ```bash

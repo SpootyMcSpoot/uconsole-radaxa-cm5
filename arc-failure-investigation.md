@@ -592,3 +592,23 @@
   `e4f8a481724c54a1b83dce8cd4235624b12389f8bd1e25f800028eff7920a742`,
   and verified the pinned RK3588 loader SHA-256
   `26baab70e6b915364f7d73d88298366db1bfc346e34683e95d3d11b52492047f`.
+
+### NVMe transfer-size and aggregate-power discriminators
+
+- Kernel-only CI run `31928645895` passed at commit `8c1003d`. Its opt-in
+  `nvme.mrrs` parameter is applied before bus mastering and namespace scan;
+  default zero preserves normal behavior. The arm64 image package SHA-256 is
+  `93539b64d46e8c8f719d9b73d9d28c1c7df2b5fef577397be09b31738741eb5c`.
+- Live boot with `nvme.mrrs=128` proved the parameter in both
+  `/sys/module/nvme/parameters/mrrs` and PCI `DevCtl` (`MaxReadReq 128 bytes`).
+  The same 4 KiB read at LBA 3,907,028,992 still caused `CSTS=0xffffffff`,
+  `PCI_STATUS=0x11`, and controller removal at 38.61 seconds. Reduced PCIe read
+  request size is ruled out as a fix.
+- A separate boot with `maxcpus=1`, normal 512-byte MRRS, and otherwise
+  unchanged storage parameters reproduced the same failure at 40.64 seconds.
+  This reduces aggregate SoC CPU load but does not change the controller's
+  eight reported I/O queues. CPU-load power margin is ruled out; SSD-local
+  firmware and NVMe-rail power/signal margin remain the supported causes.
+- Both diagnostic parameters were removed after their tests. The target was
+  returned to its normal eight-CPU eMMC-root configuration. No NVMe write,
+  partition, format, mount, or fstab change occurred.

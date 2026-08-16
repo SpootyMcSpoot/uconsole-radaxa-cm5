@@ -32,7 +32,7 @@ Operator host `bugoutbox` / `192.168.0.10` is explicitly out of target scope.
 | Radio/GPS tools | Meshtastic daemon/UI, SDR++, tar1090, PyGPSClient | PASS |
 | SHTF box | arm64 package installed; service enabled/active; health API HTTP 200; staging rooted at `/content` | PASS |
 | System health | No failed systemd units | PASS |
-| NVMe `/content` storage | Samsung 990 PRO firmware `5B2QJXD7` links and enumerates, then the same end-LBA read drops PCIe at 37 seconds on 6.1.43, 6.1.84, and new Radxa 6.1.115. Gen1, Gen2, low AIO load, ASPM/APST disabled, and `pcie_port_pm=off` all reproduce it. Guarded helper refuses the absent block device; no format/fstab change occurred | BLOCKED: update SSD externally to Samsung `8B2QJXD7` on a stable native M.2 host or replace it with a confirmed low-power drive, then rerun read-only preflight |
+| NVMe `/content` storage | Samsung 990 PRO firmware `5B2QJXD7` links and enumerates, then the same end-LBA read drops PCIe near 40 seconds on 6.1.43, 6.1.84, and Radxa 6.1.115. Gen1/Gen2, low AIO load, ASPM/APST/port-PM disabled, 128-byte MRRS, and a one-CPU boot all reproduce it. Guarded helper refuses the absent block device; no format/fstab change occurred | BLOCKED: update SSD externally to Samsung `8B2QJXD7` on a stable native M.2 host or replace it with a confirmed low-power drive, then rerun read-only preflight |
 | RTC | PCF85063 at I2C7 `0x51` reports chip absent; no `/dev/rtc*` | BLOCKED: hardware absent |
 
 Latest repeatable image run `31873951514` passed at commit `8e49015`, reusing

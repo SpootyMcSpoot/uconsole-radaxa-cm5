@@ -85,6 +85,11 @@ SSHPASS='<ssh-password>' SUDO_PASSWORD='<sudo-password>' \
 SSHPASS='<ssh-password>' SUDO_PASSWORD='<sudo-password>' \
   scripts/provision-uconsole-over-ssh.sh --host 192.168.0.146 \
   --nvme-storage /dev/nvme0n1
+
+# Preserve an existing ext4 p1 instead of formatting it:
+SSHPASS='<ssh-password>' SUDO_PASSWORD='<sudo-password>' \
+  scripts/provision-uconsole-over-ssh.sh --host 192.168.0.146 \
+  --adopt-nvme-storage /dev/nvme0n1
 ```
 
 Remote automation rejects loopback and every address assigned to operator host,
@@ -98,6 +103,13 @@ connection before initialization. The helper refuses firmware older than
 `8B2QJXD7` and runs read-only probes at both ends of the device before its first
 write. `smartd` stays disabled because older 990 PRO firmware can hang on NVMe
 Identify; `smartmontools` remains installed for manual diagnostics.
+
+When firmware cannot yet be updated, existing-filesystem adoption supports an
+explicit `--allow-legacy-990-pro-firmware` override. It never permits formatting,
+requires boundary reads plus a 512 MiB direct filesystem write/read test, and
+aborts if kernel NVMe failure signatures appear. Use only with stable external
+power and both charged 18650 cells installed. Successful setup keeps eMMC as
+root, mounts NVMe at `/content`, and makes `shtf-box.service` require that mount.
 
 For live kernel updates, install only `linux-image-*.deb`. CI-generated headers
 contain cross-build helper binaries and are intended for build inspection, not

@@ -11,6 +11,10 @@ Options:
   --allow-emmc         Permit package provisioning on eMMC root
   --migrate-nvme DEV   Migrate root to exact NVMe device (destructive)
   --nvme-storage DEV   Format expected 2 TB NVMe and mount it at /content
+  --adopt-nvme-storage DEV
+                       Preserve existing ext4 p1 and mount it at /content
+  --allow-legacy-990-pro-firmware
+                       Qualify and adopt older 990 PRO firmware under live power
   --shtf-deb FILE      Install verified arm64 shtf-box package
   --reboot             Reboot after successful provisioning
   --identity-only      Stop after local-address and target-model checks
@@ -29,6 +33,8 @@ provision=false
 allow_emmc=false
 nvme_device=""
 nvme_storage_device=""
+nvme_storage_adopt=false
+allow_legacy_990_pro_firmware=false
 shtf_deb=""
 reboot=false
 identity_only=false
@@ -42,6 +48,8 @@ while (($#)); do
         --allow-emmc) allow_emmc=true; shift ;;
         --migrate-nvme) nvme_device=${2:-}; shift 2 ;;
         --nvme-storage) nvme_storage_device=${2:-}; shift 2 ;;
+        --adopt-nvme-storage) nvme_storage_device=${2:-}; nvme_storage_adopt=true; shift 2 ;;
+        --allow-legacy-990-pro-firmware) allow_legacy_990_pro_firmware=true; shift ;;
         --shtf-deb) shtf_deb=${2:-}; shift 2 ;;
         --reboot) reboot=true; shift ;;
         --identity-only) identity_only=true; shift ;;
@@ -61,6 +69,10 @@ done
     echo "Choose either root migration or /content storage, not both" >&2
     exit 2
 }
+if [[ $allow_legacy_990_pro_firmware == true && $nvme_storage_adopt == false ]]; then
+    echo "--allow-legacy-990-pro-firmware requires --adopt-nvme-storage" >&2
+    exit 2
+fi
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 if [[ -n $nvme_storage_device ]]; then
     [[ -x $script_dir/target/uconsole-bootstrap-nvme-storage ]] || {
@@ -168,7 +180,10 @@ if [[ -n $nvme_storage_device ]]; then
         "$user@$host:/tmp/uconsole-bootstrap-nvme-storage"
     sudo_remote "install -m 0755 /tmp/uconsole-bootstrap-nvme-storage /usr/local/sbin/uconsole-bootstrap-nvme-storage && rm -f /tmp/uconsole-bootstrap-nvme-storage"
     "${remote[@]}" "test -b '$nvme_storage_device' && lsblk -dn -b -o NAME,SIZE,MODEL '$nvme_storage_device'"
-    sudo_remote "/usr/local/sbin/uconsole-bootstrap-nvme-storage --device '$nvme_storage_device' --yes"
+    storage_args=""
+    [[ $nvme_storage_adopt == false ]] || storage_args+=" --adopt-existing"
+    [[ $allow_legacy_990_pro_firmware == false ]] || storage_args+=" --allow-legacy-990-pro-firmware"
+    sudo_remote "/usr/local/sbin/uconsole-bootstrap-nvme-storage --device '$nvme_storage_device'$storage_args --yes"
 fi
 
 if [[ $reboot == true ]]; then

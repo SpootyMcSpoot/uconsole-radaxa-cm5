@@ -612,3 +612,38 @@
 - Both diagnostic parameters were removed after their tests. The target was
   returned to its normal eight-CPU eMMC-root configuration. No NVMe write,
   partition, format, mount, or fstab change occurred.
+
+### NVMe power resolution and existing-filesystem adoption
+
+- On 2026-08-16, replacing the external power supply and installing both 18650
+  cells changed the result without changing kernel, SSD, firmware, overlays, or
+  normal NVMe boot arguments. Samsung firmware remains `5B2QJXD7`.
+- The controller remained present beyond 185 seconds. Direct 4 KiB reads at the
+  first and final device blocks passed, followed by a clean read-only ext4 check
+  and a 512 MiB direct filesystem write/read test. No prior failure signature
+  (`CSTS=0xffffffff`, controller down, capacity change, or NVMe I/O error)
+  appeared. This isolates the previous reproducible loss to inadequate platform
+  power under the old supply/battery state, not a missing OS driver.
+- Storage automation gained a non-destructive `--adopt-existing` path and an
+  explicit legacy-990-PRO override. The override is unavailable to formatting,
+  still requires boundary reads, performs another 512 MiB live-power test, and
+  aborts on kernel NVMe failure signatures.
+- First adoption attempt passed disk qualification and content sync, then its
+  immediate SHTF health probe raced service readiness. Rollback restored eMMC
+  `/content` and the original fstab. Later readback showed service active,
+  health HTTP 200, and zero restarts, distinguishing readiness timing from
+  mount, permission, or service failure. A bounded 30-second readiness loop was
+  added; the single retry passed.
+- Existing ext4 partition `/dev/nvme0n1p1` was preserved and mounted by UUID
+  `2f1cf13e-c7d2-4dfa-9bb5-2c27167f522b` at `/content`. SHTF now requires that
+  mount. eMMC `/content` backup remains at
+  `/content.emmc-backup-20260816T224939Z`.
+- Reboot produced boot ID `7cd93492-cc8d-43f6-81e8-d61cecbaca87`; root remained
+  `/dev/mmcblk1p3`, NVMe remounted at `/content`, SHTF was enabled/active with
+  HTTP 200, and a post-reboot 1 GiB direct write/read passed after the former
+  40-second failure window. Kernel logged zero NVMe failure signatures and
+  systemd had zero failed units.
+- Final validator: 31 PASS and one hardware-only RTC failure. Durable target
+  evidence is `/var/log/uconsole-nvme-storage-20260816T224939Z/`; post-reboot
+  validation SHA-256 is
+  `64250c48d81c49ad0ba9f6659f9e6db0d18afb933b306d033496e338530ff8a0`.

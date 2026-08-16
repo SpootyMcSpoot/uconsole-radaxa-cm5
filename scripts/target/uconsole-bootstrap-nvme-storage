@@ -2,14 +2,25 @@
 set -Eeuo pipefail
 
 usage() {
-    echo "Usage: sudo uconsole-bootstrap-nvme-storage --device /dev/nvme0n1 --yes"
+    cat <<'EOF'
+Usage: sudo uconsole-bootstrap-nvme-storage --device /dev/nvme0n1 [options]
+
+Options:
+  --adopt-existing                    Preserve and adopt existing ext4 p1
+  --allow-legacy-990-pro-firmware     Allow qualified legacy firmware adoption
+  --yes                               Confirm requested storage setup
+EOF
 }
 
 device=""
 confirmed=false
+adopt_existing=false
+allow_legacy_990_pro_firmware=false
 while (($#)); do
     case "$1" in
         --device) device=${2:-}; shift 2 ;;
+        --adopt-existing) adopt_existing=true; shift ;;
+        --allow-legacy-990-pro-firmware) allow_legacy_990_pro_firmware=true; shift ;;
         --yes) confirmed=true; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "Unknown argument: $1" >&2; usage >&2; exit 2 ;;
@@ -20,7 +31,11 @@ done
 [[ $(uname -m) == aarch64 ]] || { echo "Refusing: target is not aarch64" >&2; exit 1; }
 model=$(tr -d '\0' </proc/device-tree/model 2>/dev/null || true)
 [[ $model == "Radxa CM5 RPI CM4 IO" ]] || { echo "Refusing target model: $model" >&2; exit 1; }
-$confirmed || { echo "Refusing destructive NVMe initialization without --yes" >&2; exit 2; }
+$confirmed || { echo "Refusing NVMe storage setup without --yes" >&2; exit 2; }
+if [[ $allow_legacy_990_pro_firmware == true && $adopt_existing == false ]]; then
+    echo "Legacy Samsung firmware override requires --adopt-existing" >&2
+    exit 2
+fi
 if ! {
     grep -Eq '(^|[[:space:]])nvme_core[.]default_ps_max_latency_us=0([[:space:]]|$)' /proc/cmdline &&
         grep -Eq '(^|[[:space:]])pcie_aspm=off([[:space:]]|$)' /proc/cmdline
@@ -33,10 +48,17 @@ fi
     exit 1
 }
 
-for command in blockdev dd findmnt lsblk blkid sgdisk wipefs mkfs.ext4 rsync \
-    udevadm partprobe mount mountpoint umount systemctl curl; do
+for command in blockdev dd findmnt lsblk blkid rsync mount mountpoint umount \
+    systemctl curl; do
     command -v "$command" >/dev/null || { echo "Missing required command: $command" >&2; exit 1; }
 done
+if [[ $adopt_existing == true ]]; then
+    command -v e2fsck >/dev/null || { echo "Missing required command: e2fsck" >&2; exit 1; }
+else
+    for command in sgdisk wipefs mkfs.ext4 udevadm partprobe; do
+        command -v "$command" >/dev/null || { echo "Missing required command: $command" >&2; exit 1; }
+    done
+fi
 
 root_source=$(findmnt -n -o SOURCE /)
 [[ $root_source != "$device"* ]] || { echo "Refusing root device: $device" >&2; exit 1; }
@@ -50,9 +72,13 @@ controller=${controller%n*}
 nvme_model=$(tr -d '[:space:]' <"/sys/class/nvme/$controller/model" 2>/dev/null || true)
 nvme_firmware=$(tr -d '[:space:]' <"/sys/class/nvme/$controller/firmware_rev" 2>/dev/null || true)
 if [[ $nvme_model == SamsungSSD990PRO2TB && $nvme_firmware != 8B2QJXD7 ]]; then
-    echo "Refusing Samsung 990 PRO firmware $nvme_firmware; update to 8B2QJXD7 first" >&2
-    echo "Official update: https://semiconductor.samsung.com/consumer-storage/support/tools/" >&2
-    exit 1
+    if [[ $allow_legacy_990_pro_firmware == true ]]; then
+        echo "WARNING: qualifying existing Samsung 990 PRO firmware $nvme_firmware under live power" >&2
+    else
+        echo "Refusing Samsung 990 PRO firmware $nvme_firmware; update to 8B2QJXD7 first" >&2
+        echo "Official update: https://semiconductor.samsung.com/consumer-storage/support/tools/" >&2
+        exit 1
+    fi
 fi
 # Prove ordinary reads work at both ends before any partition-table write.
 dd if="$device" of=/dev/null bs=4096 count=1 iflag=direct status=none
@@ -87,6 +113,10 @@ fstab_backup="/etc/fstab.pre-nvme-content-$stamp"
 content_swapped=false
 fstab_changed=false
 service_was_active=false
+service_dropin=/etc/systemd/system/shtf-box.service.d/content-mount.conf
+service_dropin_backup="$evidence/content-mount.conf.backup"
+service_dropin_existed=false
+service_dropin_changed=false
 systemctl is-active --quiet shtf-box.service && service_was_active=true || true
 
 rollback() {
@@ -103,23 +133,59 @@ rollback() {
         rmdir /content 2>/dev/null
         mv "$content_backup" /content
     fi
+    if [[ $service_dropin_changed == true ]]; then
+        if [[ $service_dropin_existed == true ]]; then
+            install -m 0644 "$service_dropin_backup" "$service_dropin"
+        else
+            rm -f "$service_dropin"
+        fi
+        systemctl daemon-reload
+    fi
     [[ $service_was_active == false ]] || systemctl start shtf-box.service
     echo "NVMe storage setup failed; eMMC /content rollback attempted" >&2
     exit "$rc"
 }
 trap rollback ERR
 
-wipefs --all "$device"
-sgdisk --zap-all "$device"
-sgdisk --new=1:0:0 --typecode=1:8300 --change-name=1:shtf-content "$device"
-partprobe "$device"
-udevadm settle
 partition="${device}p1"
-[[ -b $partition ]] || { echo "Partition did not appear: $partition" >&2; false; }
-mkfs.ext4 -F -L SHTF_CONTENT "$partition"
+if [[ $adopt_existing == true ]]; then
+    [[ -b $partition ]] || { echo "Missing existing partition: $partition" >&2; false; }
+    [[ $(blkid -s TYPE -o value "$partition") == ext4 ]] || {
+        echo "Refusing: existing $partition is not ext4" >&2
+        false
+    }
+    [[ $(lsblk -nrpo NAME "$device" | wc -l) -eq 2 ]] || {
+        echo "Refusing: adoption requires exactly one partition" >&2
+        false
+    }
+    e2fsck -fn "$partition"
+else
+    wipefs --all "$device"
+    sgdisk --zap-all "$device"
+    sgdisk --new=1:0:0 --typecode=1:8300 --change-name=1:shtf-content "$device"
+    partprobe "$device"
+    udevadm settle
+    [[ -b $partition ]] || { echo "Partition did not appear: $partition" >&2; false; }
+    mkfs.ext4 -F -L SHTF_CONTENT "$partition"
+fi
 
 mkdir -p "$mount_temp"
 mount "$partition" "$mount_temp"
+if [[ $allow_legacy_990_pro_firmware == true ]]; then
+    qualification_file="$mount_temp/.uconsole-nvme-qualification-$stamp"
+    available_bytes=$(df -B1 --output=avail "$mount_temp" | tail -1)
+    ((available_bytes >= 1073741824)) || { echo "Insufficient free space for NVMe qualification" >&2; false; }
+    dd if=/dev/zero of="$qualification_file" bs=4M count=128 oflag=direct status=none
+    sync
+    dd if="$qualification_file" of=/dev/null bs=4M iflag=direct status=none
+    rm -f "$qualification_file"
+    sync
+    if dmesg | grep -Eqi 'nvme.*(I/O [0-9]+ QID|controller is down|Device not ready|CSTS=0xffffffff|detected capacity change)'; then
+        echo "NVMe kernel error detected during qualification" >&2
+        false
+    fi
+    echo "PASS legacy Samsung firmware live-power qualification"
+fi
 [[ $service_was_active == false ]] || systemctl stop shtf-box.service
 rsync -aHAXx --numeric-ids --info=stats2 /content/ "$mount_temp"/
 sync
@@ -144,8 +210,28 @@ mount /content
 }
 [[ -L /srv/shtf-box && $(readlink /srv/shtf-box) == /content ]] || ln -sfn /content /srv/shtf-box
 if systemctl list-unit-files shtf-box.service --no-legend 2>/dev/null | grep -q '^shtf-box[.]service'; then
+    mkdir -p "$(dirname "$service_dropin")"
+    if [[ -f $service_dropin ]]; then
+        cp -a "$service_dropin" "$service_dropin_backup"
+        service_dropin_existed=true
+    fi
+    printf '[Unit]\nRequiresMountsFor=/content\nAfter=content.mount\n' >"$evidence/content-mount.conf.new"
+    install -m 0644 "$evidence/content-mount.conf.new" "$service_dropin"
+    service_dropin_changed=true
+    systemctl daemon-reload
     systemctl enable --now shtf-box.service
-    curl -fsS --max-time 10 http://127.0.0.1:8080/api/v1/health >/dev/null
+    health_ready=false
+    for _attempt in {1..30}; do
+        if curl -fsS --max-time 2 http://127.0.0.1:8080/api/v1/health >/dev/null; then
+            health_ready=true
+            break
+        fi
+        sleep 1
+    done
+    [[ $health_ready == true ]] || {
+        echo "SHTF health endpoint did not become ready within 30 seconds" >&2
+        false
+    }
 fi
 
 printf 'content_uuid=%s\npartition=%s\nemmc_backup=%s\nfstab_backup=%s\n' \
